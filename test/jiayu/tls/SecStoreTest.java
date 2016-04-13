@@ -8,9 +8,9 @@ import java.nio.file.Paths;
 public class SecStoreTest {
     @Test
     public void receiveConnectionSecured() throws Exception {
-        SecStore secStore = new SecStore(new InetSocketAddress("localhost", 4321));
-        secStore.setServerCert(Paths.get("C:\\Users\\jiayu\\IdeaProjects\\computer-systems-engineering\\materials\\NSProjectRelease\\keys\\server.crt"));
-        secStore.setServerKey(Paths.get("C:\\Users\\jiayu\\IdeaProjects\\computer-systems-engineering\\materials\\NSProjectRelease\\keys\\pkcs8ServerKey.der"));
+        SecStore secStore = new SecStore(new InetSocketAddress("192.168.148.129", 443));
+        secStore.setServerCert(Paths.get("misc/certs/servercert.crt"));
+        secStore.setServerKey(Paths.get("misc/certs/serverkey.der"));
         secStore.listen(secStore::receiveConnectionSecured);
     }
 
