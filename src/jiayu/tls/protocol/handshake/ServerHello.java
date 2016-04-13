@@ -44,7 +44,7 @@ public class ServerHello extends Handshake {
         this.random = random;
         this.sessionId = sessionId;
         this.cipherSuite = cipherSuite;
-        this.compressionMethod = COMPRESSION_METHOD;
+        this.compressionMethod = compressionMethod;
 
         length = 2                  // server version (2 bytes)
                 + 32                // random (32 bytes)
@@ -92,14 +92,13 @@ public class ServerHello extends Handshake {
 
     @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder();
-        sb.append(String.format("server_version: %s", Integer.toHexString(serverVersion)))
-                .append(String.format("random: %s", Arrays.toString(random.toBytes())))
-                .append(String.format("session_id: %d", sessionId.getValue()))
-                .append(String.format("cipher_suite: %d", Integer.toHexString(cipherSuite.value)))
-                .append(String.format("compression_method: %d", Integer.toHexString(compressionMethod)));
+        String sb = String.format("server_version: %s", Integer.toHexString(serverVersion)) +
+                String.format("random: %s", Arrays.toString(random.toBytes())) +
+                String.format("session_id: %d", sessionId.getValue()) +
+                String.format("cipher_suite: %s", Integer.toHexString(cipherSuite.value)) +
+                String.format("compression_method: %s", Integer.toHexString(compressionMethod));
 
-        return sb.toString();
+        return sb;
     }
 
     public static ServerHello interpret(ProtocolMessage message) throws UnexpectedMessageException {
