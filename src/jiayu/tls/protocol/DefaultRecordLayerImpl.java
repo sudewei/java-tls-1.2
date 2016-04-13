@@ -68,15 +68,14 @@ public class DefaultRecordLayerImpl implements RecordLayer {
                 // we get more bytes from the next incoming record
                 while (inputQueue.size() < Handshake.HEADER_LENGTH) updateInputQueue(nextMsgType);
 
-                byte handshakeType = inputQueue.dequeue();  // ignore handshake type for now
-                byte[] length = inputQueue.dequeue(3);  // handshake length field is 3 bytes long
+                byte[] length = inputQueue.peek(3, 1);  // handshake length field is 3 bytes long
                 int incHandshakeLength = UIntVector.btoi(length);
 
                 // if the entire of the incoming handshake is not in the input queue yet,
                 // we get more bytes from the next incoming record
-                while (inputQueue.size() < incHandshakeLength) updateInputQueue(nextMsgType);
+                while (inputQueue.size() < 4 + incHandshakeLength) updateInputQueue(nextMsgType);
 
-                byte[] incHandshakeContent = inputQueue.dequeue(incHandshakeLength);
+                byte[] incHandshakeContent = inputQueue.dequeue(4 + incHandshakeLength);
                 if (!inputQueue.isEmpty()) leftoversType = HANDSHAKE;
                 return new Message(HANDSHAKE, incHandshakeContent);
             case APPLICATION_DATA:

@@ -28,16 +28,24 @@ public class ByteQueue {
         return buffer[0];
     }
 
-    public Byte peek() {
-        if (buffer.length < 1) return null;
+    public byte peek() {
+        if (buffer.length < 1) throw new NoSuchElementException();
 
         return buffer[0];
     }
 
     public byte[] peek(int length) {
-        if (length > buffer.length) return null;
+        if (length > buffer.length) throw new NoSuchElementException();
 
         return Arrays.copyOfRange(buffer, 0, length);
+    }
+
+    public byte[] peek(int length, int offset) {
+        if (length + offset > buffer.length) throw new NoSuchElementException();
+
+        byte[] bytes = new byte[length];
+        System.arraycopy(buffer, offset, bytes, 0, length);
+        return bytes;
     }
 
     public byte dequeue() {

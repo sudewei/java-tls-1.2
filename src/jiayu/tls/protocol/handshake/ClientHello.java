@@ -3,6 +3,7 @@ package jiayu.tls.protocol.handshake;
 import jiayu.tls.protocol.ContentType;
 import jiayu.tls.protocol.ProtocolMessage;
 
+import javax.xml.bind.DatatypeConverter;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
@@ -120,6 +121,8 @@ public class ClientHello extends Handshake {
     public static ClientHello interpret(ProtocolMessage message) throws UnexpectedMessageException {
         if (message.getContentType() != ContentType.HANDSHAKE)
             throw new UnexpectedMessageException();
+
+        System.out.println(DatatypeConverter.printHexBinary(message.getContent()));
 
         ByteBuffer buf = ByteBuffer.wrap(message.getContent());
 

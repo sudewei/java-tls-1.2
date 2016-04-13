@@ -148,15 +148,21 @@ public class SecStore {
             System.out.println(clientHello);
         } catch (UnexpectedMessageException e) {
 //            cw.write(Alert.unexpectedMessageAlert());
+            System.out.println("Unexpected message!");
+
+            e.printStackTrace();
+
             sc.close();
             return;
         }
 
-
         // choose cipher suite
+        System.out.print("Choosing cipher suite... ");
+        System.out.flush();
         CipherSuite selectedCipherSuite = Arrays.asList(clientHello.getCipherSuites()).contains(preferredCipherSuite)
                 ? preferredCipherSuite
                 : clientHello.getCipherSuites()[0];
+        System.out.println("Selected cipher suite: " + selectedCipherSuite.name());
 
         // send server hello
         System.out.print("Sending ServerHello... ");
