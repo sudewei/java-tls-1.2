@@ -1,9 +1,12 @@
 package jiayu.tls;
 
 import jiayu.tls.filetransfer.Metadata;
+import jiayu.tls.protocol.ProtocolMessage;
 import jiayu.tls.protocol.RecordLayer;
 import jiayu.tls.protocol.handshake.CipherSuite;
 import jiayu.tls.protocol.handshake.ClientHello;
+import jiayu.tls.protocol.handshake.ServerHello;
+import jiayu.tls.protocol.handshake.UnexpectedMessageException;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -65,8 +68,15 @@ public class Client {
         ClientHello clientHello = new ClientHello(SUPPORTED_CIPHER_SUITES);
         recordLayer.putNextOutgoingMessage(clientHello);
 
-//        // receive server hello
-//        ProtocolMessage serverHello = recordLayer.getNextIncomingMessage();
+        // receive server hello
+        System.out.print("Waiting for ServerHello... ");
+        System.out.flush();
+        try {
+            ProtocolMessage serverHello = ServerHello.interpret(recordLayer.getNextIncomingMessage());
+            System.out.println("Received.");
+        } catch (UnexpectedMessageException e) {
+            e.printStackTrace();
+        }
 
 
 //        try {

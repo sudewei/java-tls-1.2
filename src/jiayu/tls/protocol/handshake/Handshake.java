@@ -9,8 +9,7 @@ public abstract class Handshake implements ProtocolMessage {
     public static final ContentType CONTENT_TYPE = ContentType.HANDSHAKE;
     public static final int HEADER_LENGTH = 4;
 
-    final HandshakeType handshakeType;
-
+    private final HandshakeType handshakeType;
 
     Handshake(HandshakeType handshakeType) {
         this.handshakeType = handshakeType;
@@ -21,6 +20,17 @@ public abstract class Handshake implements ProtocolMessage {
                 .put(handshakeType.value)
                 .put(UIntVector.itob(length, 3))
                 .array();
+    }
+
+    static int interpretHeader(ByteBuffer content, HandshakeType expectedType) throws UnexpectedMessageException {
+        byte type = content.get();
+        byte[] lengthBytes = new byte[3];
+        content.get(lengthBytes);
+
+        if (HandshakeType.valueOf(type) != expectedType)
+            throw new UnexpectedMessageException();
+
+        return UIntVector.btoi(lengthBytes);
     }
 
     @Override

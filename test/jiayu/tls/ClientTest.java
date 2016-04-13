@@ -8,8 +8,8 @@ import java.nio.file.Paths;
 public class ClientTest {
     @Test
     public void connectSecured() throws Exception {
-        Client client = new Client(new InetSocketAddress("192.168.198.128", 443));
-        client.setCACertificate(Paths.get("C:\\Users\\jiayu\\IdeaProjects\\computer-systems-engineering\\materials\\NSProjectRelease\\keys\\server.crt"));
+        Client client = new Client(new InetSocketAddress("192.168.148.129", 443));
+        client.setCACertificate(Paths.get("misc/certs/servercert.crt"));
         client.connectSecured();
     }
 

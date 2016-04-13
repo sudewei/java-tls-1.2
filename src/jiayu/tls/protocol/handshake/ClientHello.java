@@ -63,14 +63,14 @@ public class ClientHello extends Handshake {
         this.compressionMethodsLength = (byte) compressionMethods.length;
         this.compressionMethods = compressionMethods;
 
-        length = 2                     // client version (2 bytes)
-                + 32                   // size of random (32 bytes)
-                + 1                    // size of sessionid.length (1 byte)
-                + sessionId.length     // size of sessionid (sessionid.length)
-                + 2                    // size of ciphersuiteslength (2 bytes)
-                + cipherSuitesLength   // size of ciphersuites (ciphersuiteslength)
-                + 1                    // size of compressionmethodslength (1 byte)
-                + 1;                   // size of compressionmethods ( 1 byte)
+        length = 2                    // client version (2 bytes)
+                + 32                  // random (32 bytes)
+                + 1                   // sessionid.length (1 byte)
+                + sessionId.length    // sessionid (sessionid.length)
+                + 2                   // ciphersuiteslength (2 bytes)
+                + cipherSuitesLength  // ciphersuites (ciphersuiteslength)
+                + 1                   // compressionmethodslength (1 byte)
+                + 1;                  // compressionmethods ( 1 byte)
 
         header = createHeader(length);
     }
@@ -96,18 +96,18 @@ public class ClientHello extends Handshake {
     }
 
     private byte[] toBytes() {
-        ByteBuffer contents = ByteBuffer.allocate(HEADER_LENGTH + length);
-        contents.put(header)
-                .putShort(clientVersion)
-                .put(random.toBytes())
-                .put(sessionId.length)
-                .put(sessionId.bytes)
-                .putShort(cipherSuitesLength);
-        for (CipherSuite cipherSuite : cipherSuites)
-            contents.putShort(cipherSuite.value);
-        contents.put(compressionMethodsLength)
-                .put(compressionMethods);
-        return contents.array();
+        ByteBuffer content = ByteBuffer.allocate(HEADER_LENGTH + length);
+        content.put(header)                           // header
+                .putShort(clientVersion)              // client version
+                .put(random.toBytes())                // random
+                .put(sessionId.length)                // session id length
+                .put(sessionId.bytes)                 // session id
+                .putShort(cipherSuitesLength);        // cipher suites length
+        for (CipherSuite cipherSuite : cipherSuites)  // cipher suites
+            content.putShort(cipherSuite.value);
+        content.put(compressionMethodsLength)         // compression methods length
+                .put(compressionMethods);             // compression methods
+        return content.array();
     }
 
     /**
@@ -198,7 +198,7 @@ public class ClientHello extends Handshake {
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
-        sb.append(String.format("client_version: [%s, %s]", Integer.toHexString(clientVersion >> 0x8), Integer.toHexString(clientVersion & 0xF)))
+        sb.append(String.format("client_version: %s", Integer.toHexString(clientVersion)))
                 .append(String.format("random: %s", Arrays.toString(random.toBytes())))
                 .append(String.format("session_id: %d", sessionId.getValue()))
                 .append(String.format("cipher_suites", Arrays.toString(cipherSuites)))
