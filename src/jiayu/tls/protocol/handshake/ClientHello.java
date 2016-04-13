@@ -133,8 +133,7 @@ public class ClientHello extends Handshake {
 
         short clientVersion = buf.getShort();                            // get 2 bytes
         Random random = Random.fromBytes(buf);                           // get 32 bytes
-        byte sessionIdLength = buf.get();
-        // get 1 byte
+        byte sessionIdLength = buf.get();                                // get 1 byte
         byte[] sessionIdBytes = new byte[sessionIdLength];
         buf.get(sessionIdBytes);                                         // get sessionid.length bytes
         UIntVector sessionId = new UIntVector(sessionIdBytes);
