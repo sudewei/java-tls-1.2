@@ -2,9 +2,11 @@ package jiayu.tls;
 
 import jiayu.tls.filetransfer.Checksum;
 import jiayu.tls.filetransfer.Metadata;
+import jiayu.tls.protocol.Alert;
 import jiayu.tls.protocol.RecordLayer;
 import jiayu.tls.protocol.handshake.CipherSuite;
 import jiayu.tls.protocol.handshake.ClientHello;
+import jiayu.tls.protocol.handshake.ServerHello;
 import jiayu.tls.protocol.handshake.UnexpectedMessageException;
 
 import java.io.FileNotFoundException;
@@ -19,8 +21,10 @@ import java.nio.file.*;
 import java.security.KeyFactory;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
+import java.security.SecureRandom;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
+import java.util.Arrays;
 
 public class SecStore {
     // magic number for acknowledging successful upload
@@ -134,12 +138,9 @@ public class SecStore {
 
         RecordLayer recordLayer = RecordLayer.getInstance(sc);
 
-        ByteBuffer sndBuf = ByteBuffer.allocate(sc.socket().getSendBufferSize());
-        ByteBuffer rcvBuf = ByteBuffer.allocate(sc.socket().getReceiveBufferSize());
-        ChannelWriter cw = ChannelWriter.get(sc, sndBuf);
-
         // receive client hello
         System.out.print("Waiting for ClientHello... ");
+        System.out.flush();
         ClientHello clientHello;
         try {
             clientHello = ClientHello.interpret(recordLayer.getNextIncomingMessage());
@@ -148,20 +149,21 @@ public class SecStore {
         } catch (UnexpectedMessageException e) {
 //            cw.write(Alert.unexpectedMessageAlert());
             sc.close();
-//            return;
+            return;
         }
 
-//        // choose cipher suite
-//        CipherSuite selectedCipherSuite = clientHello.getCipherSuites().contains(preferredCipherSuite)
-//                ? preferredCipherSuite
-//                : clientHello.getCipherSuites().get(0);
-//        int sessionId = new SecureRandom().nextInt();
-//
-//        // send server hello
-//        System.out.print("Sending ServerHello... ");
-//        ServerHello serverHello = new ServerHello(sessionId, selectedCipherSuite);
-//        cw.write(serverHello);
-//        System.out.println("Done.");
+
+        // choose cipher suite
+        CipherSuite selectedCipherSuite = Arrays.asList(clientHello.getCipherSuites()).contains(preferredCipherSuite)
+                ? preferredCipherSuite
+                : clientHello.getCipherSuites()[0];
+
+        // send server hello
+        System.out.print("Sending ServerHello... ");
+        System.out.flush();
+        ServerHello serverHello = new ServerHello(selectedCipherSuite);
+        recordLayer.putNextOutgoingMessage(serverHello);
+        System.out.println("Done.");
 //
 //        // send server serverCert
 //        System.out.print("Sending Certificate... ");

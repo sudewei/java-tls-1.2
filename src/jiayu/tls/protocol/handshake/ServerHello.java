@@ -5,8 +5,9 @@ import jiayu.tls.protocol.ProtocolMessage;
 
 import java.nio.ByteBuffer;
 import java.security.SecureRandom;
+import java.util.Arrays;
 
-public class ServerHello extends Handshake implements ProtocolMessage {
+public class ServerHello extends Handshake {
     private static final short SERVER_VERSION = 0x0303;
     private static final byte COMPRESSION_METHOD = 0x00;
 
@@ -71,10 +72,34 @@ public class ServerHello extends Handshake implements ProtocolMessage {
         return cipherSuite;
     }
 
+    private byte[] toBytes() {
+        return ByteBuffer.allocate(HEADER_LENGTH + length)
+                .put(header)                  // header
+                .putShort(serverVersion)      // server version
+                .put(random.toBytes())        // random
+                .put(sessionId.length)        // session id length
+                .put(sessionId.bytes)         // session id
+                .putShort(cipherSuite.value)  // cipher suite
+                .put(compressionMethod)       // compression method
+                .array();
+
+    }
 
     @Override
     public byte[] getContent() {
-        return new byte[0];
+        return toBytes();
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.format("server_version: %s", Integer.toHexString(serverVersion)))
+                .append(String.format("random: %s", Arrays.toString(random.toBytes())))
+                .append(String.format("session_id: %d", sessionId.getValue()))
+                .append(String.format("cipher_suite: %d", Integer.toHexString(cipherSuite.value)))
+                .append(String.format("compression_method: %d", Integer.toHexString(compressionMethod)));
+
+        return sb.toString();
     }
 
     public static ServerHello interpret(ProtocolMessage message) throws UnexpectedMessageException {
