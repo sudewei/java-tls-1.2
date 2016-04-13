@@ -92,13 +92,12 @@ public class ServerHello extends Handshake {
 
     @Override
     public String toString() {
-        String sb = String.format("server_version: %s", Integer.toHexString(serverVersion)) +
+
+        return String.format("server_version: %s", Integer.toHexString(serverVersion)) +
                 String.format("random: %s", Arrays.toString(random.toBytes())) +
                 String.format("session_id: %d", sessionId.getValue()) +
                 String.format("cipher_suite: %s", Integer.toHexString(cipherSuite.value)) +
                 String.format("compression_method: %s", Integer.toHexString(compressionMethod));
-
-        return sb;
     }
 
     public static ServerHello interpret(ProtocolMessage message) throws UnexpectedMessageException {

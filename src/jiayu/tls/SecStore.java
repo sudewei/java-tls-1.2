@@ -2,12 +2,8 @@ package jiayu.tls;
 
 import jiayu.tls.filetransfer.Checksum;
 import jiayu.tls.filetransfer.Metadata;
-import jiayu.tls.protocol.Alert;
 import jiayu.tls.protocol.RecordLayer;
-import jiayu.tls.protocol.handshake.CipherSuite;
-import jiayu.tls.protocol.handshake.ClientHello;
-import jiayu.tls.protocol.handshake.ServerHello;
-import jiayu.tls.protocol.handshake.UnexpectedMessageException;
+import jiayu.tls.protocol.handshake.*;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -21,7 +17,6 @@ import java.nio.file.*;
 import java.security.KeyFactory;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
-import java.security.SecureRandom;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.Arrays;
@@ -170,18 +165,21 @@ public class SecStore {
         ServerHello serverHello = new ServerHello(selectedCipherSuite);
         recordLayer.putNextOutgoingMessage(serverHello);
         System.out.println("Done.");
-//
-//        // send server serverCert
-//        System.out.print("Sending Certificate... ");
-//        Certificate certificate = new Certificate(this.serverCert);
-//        cw.write(certificate);
-//        System.out.println("Done.");
-//
-//        // send server hello done
-//        System.out.print("Sending ServerHelloDone... ");
-//        cw.write(new ServerHelloDone());
-//        System.out.println("Done.");
-//
+
+        // send server serverCert
+        System.out.print("Sending Certificate... ");
+        System.out.flush();
+        Certificate certificate = new Certificate(this.serverCert);
+        recordLayer.putNextOutgoingMessage(certificate);
+        System.out.println("Done.");
+
+        // send server hello done
+        System.out.print("Sending ServerHelloDone... ");
+        System.out.flush();
+        ServerHelloDone serverHelloDone = new ServerHelloDone();
+        recordLayer.putNextOutgoingMessage(serverHelloDone);
+        System.out.println("Done.");
+
 //        // receive ClientKeyExchange
 //        System.out.print("Receiving ClientKeyExchange... ");
 //        ClientKeyExchange clientKeyExchange = ClientKeyExchange.tryToReadFrom(sc);
@@ -191,7 +189,7 @@ public class SecStore {
 //        PremasterSecret premasterSecret = new PremasterSecret(clientKeyExchange.getEncryptedPremasterSecret());
 //        try {
 //            premasterSecret.decrypt(serverkey, clientHello.getClientVersion());
-//            System.out.println("Decrypted premaster secret: " + Arrays.toString(premasterSecret.getBytes()));
+//            System.out.println("Decrypted premaster secret: " + Arrays.toString(premasterSecret.toBytes()));
 //        } catch (BadPaddingException | IllegalBlockSizeException | NoSuchPaddingException | InvalidKeyException | NoSuchAlgorithmException e) {
 //            e.printStackTrace();
 //        }
@@ -203,7 +201,7 @@ public class SecStore {
 //        MasterSecret masterSecret;
 //        try {
 //            masterSecret = MasterSecret.generateMasterSecret(premasterSecret, clientHello, serverHello);
-//            System.out.println("Master secret: " + Arrays.toString(masterSecret.getBytes()));
+//            System.out.println("Master secret: " + Arrays.toString(masterSecret.toBytes()));
 //        } catch (InvalidKeyException | NoSuchAlgorithmException e) {
 //            e.printStackTrace();
 //        }

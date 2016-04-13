@@ -1,12 +1,8 @@
 package jiayu.tls;
 
 import jiayu.tls.filetransfer.Metadata;
-import jiayu.tls.protocol.ProtocolMessage;
 import jiayu.tls.protocol.RecordLayer;
-import jiayu.tls.protocol.handshake.CipherSuite;
-import jiayu.tls.protocol.handshake.ClientHello;
-import jiayu.tls.protocol.handshake.ServerHello;
-import jiayu.tls.protocol.handshake.UnexpectedMessageException;
+import jiayu.tls.protocol.handshake.*;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -64,20 +60,39 @@ public class Client {
 //        ChannelWriter cw = ChannelWriter.get(sc, sndBuf);
 
         // send client hello
-        System.out.println("Sending client hello");
+        System.out.print("Sending client hello... ");
+        System.out.flush();
         ClientHello clientHello = new ClientHello(SUPPORTED_CIPHER_SUITES);
         recordLayer.putNextOutgoingMessage(clientHello);
+        System.out.println("Done.");
 
         // receive server hello
         System.out.print("Waiting for ServerHello... ");
         System.out.flush();
         try {
-            ProtocolMessage serverHello = ServerHello.interpret(recordLayer.getNextIncomingMessage());
+            ServerHello serverHello = ServerHello.interpret(recordLayer.getNextIncomingMessage());
             System.out.println("Received.");
         } catch (UnexpectedMessageException e) {
             e.printStackTrace();
         }
 
+        System.out.print("Waiting for Certificate... ");
+        System.out.flush();
+        try {
+            Certificate certificate = Certificate.interpret(recordLayer.getNextIncomingMessage());
+            System.out.println("Received.");
+        } catch (UnexpectedMessageException e) {
+            e.printStackTrace();
+        }
+
+        System.out.print("Waiting for ServerHelloDone... ");
+        System.out.flush();
+        try {
+            ServerHelloDone serverHelloDone = ServerHelloDone.interpret(recordLayer.getNextIncomingMessage());
+            System.out.println("Received.");
+        } catch (UnexpectedMessageException e) {
+            e.printStackTrace();
+        }
 
 //        try {
 //            // receive server hello
@@ -90,7 +105,7 @@ public class Client {
 //            System.out.print("Waiting for server certificate... ");
 //            Certificate certificate = Certificate.tryToReadFrom(sc);
 //            System.out.println("Received.");
-//            System.out.println(new String(certificate.getCertificate()));
+//            System.out.println(new String(certificate.getCertificateList()));
 //
 //            // wait for server hello done
 //            System.out.print("Waiting for ServerHelloDone... ");
@@ -101,7 +116,7 @@ public class Client {
 //
 //            // authenticate server certificate
 //            System.out.print("Authenticating server certificate... ");
-//            X509Certificate serverCert = (X509Certificate) CertificateFactory.getInstance("X.509").generateCertificate(new ByteArrayInputStream(certificate.getCertificate()));
+//            X509Certificate serverCert = (X509Certificate) CertificateFactory.getInstance("X.509").generateCertificate(new ByteArrayInputStream(certificate.getCertificateList()));
 //            try {
 //                serverCert.checkValidity();
 //                serverCert.verify(caCert.getPublicKey());
@@ -128,8 +143,8 @@ public class Client {
 //                if (selectedCipherSuite.keyExchangeAlgorithm.equals("RSA")) {
 //                    premasterSecret = PremasterSecret.newRSAPremasterSecret(CLIENT_VERSION);
 //                    System.out.println("Done.");
-//                    System.out.println("Unencypted premaster secret: " + Arrays.toString(premasterSecret.getBytes()));
-//                    System.out.println("Premaster secret length: " + premasterSecret.getBytes().length);
+//                    System.out.println("Unencypted premaster secret: " + Arrays.toString(premasterSecret.toBytes()));
+//                    System.out.println("Premaster secret length: " + premasterSecret.toBytes().length);
 //                } else {
 //                    System.out.println("Failed! Reason: Unsupported key exchange algorithm");
 //                    cw.write(Alert.fatal(Alert.AlertDescription.HANDSHAKE_FAILURE));
@@ -156,8 +171,8 @@ public class Client {
 //            MasterSecret masterSecret;
 //            try {
 //                masterSecret = MasterSecret.generateMasterSecret(premasterSecret, clientHello, serverHello);
-//                System.out.println("Master secret: " + Arrays.toString(masterSecret.getBytes()));
-//                System.out.println("Master secret length: " + masterSecret.getBytes().length);
+//                System.out.println("Master secret: " + Arrays.toString(masterSecret.toBytes()));
+//                System.out.println("Master secret length: " + masterSecret.toBytes().length);
 //            } catch (InvalidKeyException | NoSuchAlgorithmException e) {
 //                e.printStackTrace();
 //            }

@@ -1,38 +1,52 @@
 package jiayu.tls.protocol.handshake;
 
+import jiayu.tls.protocol.ContentType;
+import jiayu.tls.protocol.ProtocolMessage;
+
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 public class Certificate extends Handshake {
-    private byte[] certificate;
+    private final int length;
+    private final byte[] header;
 
-    public Certificate(byte[] certificate) {
+    private final byte[] certificateList;
+
+    public Certificate(byte[] certificateList) {
         super(HandshakeType.CERTIFICATE);
-        this.certificate = certificate;
+
+        this.certificateList = certificateList;
+
+        length = certificateList.length;
+        header = createHeader(length);
     }
 
-    public byte[] getCertificate() {
-        return certificate;
+    public byte[] getCertificateList() {
+        return Arrays.copyOf(certificateList, certificateList.length);
     }
 
-    private static Certificate createFrom(Handshake handshake) {
-        ByteBuffer buf = ByteBuffer.wrap(handshake.getContent());
-        int length = buf.getInt();
-        byte[] certificate = new byte[length];
-
-        buf.get(certificate);
-
-        return new Certificate(certificate);
-    }
-
-    public byte[] getBytes() {
-        return ByteBuffer.allocate(Integer.BYTES + certificate.length)
-                .putInt(certificate.length)
-                .put(certificate)
+    private byte[] toBytes() {
+        return ByteBuffer.allocate(HEADER_LENGTH + length)
+                .put(certificateList)
                 .array();
+    }
+
+    public static Certificate interpret(ProtocolMessage message) throws UnexpectedMessageException {
+        if (message.getContentType() != ContentType.HANDSHAKE)
+            throw new UnexpectedMessageException();
+
+        ByteBuffer content = ByteBuffer.wrap(message.getContent());
+
+        int length = interpretHeader(content, HandshakeType.CERTIFICATE);
+
+        byte[] certificateList = new byte[length];
+        content.get(certificateList);
+
+        return new Certificate(certificateList);
     }
 
     @Override
     public byte[] getContent() {
-        return getBytes();
+        return toBytes();
     }
 }
