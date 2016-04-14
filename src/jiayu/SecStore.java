@@ -1,18 +1,14 @@
 package jiayu;
 
 import jiayu.tls.*;
-import jiayu.tls.filetransfer.Checksum;
-import jiayu.tls.filetransfer.Metadata;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.net.SocketAddress;
-import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
-import java.nio.channels.ServerSocketChannel;
-import java.nio.channels.SocketChannel;
-import java.nio.file.*;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.nio.file.Files;
+import java.nio.file.NotDirectoryException;
+import java.nio.file.Path;
 import java.security.KeyFactory;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
@@ -24,7 +20,7 @@ public class SecStore {
     // magic number for acknowledging successful upload
     private static final long UPLOAD_SUCCESS = 6584997751L;
 
-    private final ServerSocketChannel ssc;
+    private final ServerSocket sc;
     private Path destDir;
 
     // should this be in memory?
@@ -34,22 +30,12 @@ public class SecStore {
 
     private CipherSuite preferredCipherSuite;
 
-    public static void main(String[] args) {
-        try {
-            SecStore server = new SecStore(new InetSocketAddress("10.12.17.118", 4321), Paths.get(args[0]));
-            server.setServerCert(Paths.get(args[1]));
-            server.listen();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+    public SecStore(int port) throws IOException {
+        sc = new ServerSocket(port);
     }
 
-    public SecStore(SocketAddress addr) throws IOException {
-        ssc = ServerSocketChannel.open().bind(addr);
-    }
-
-    public SecStore(SocketAddress addr, Path destDir) throws IOException {
-        this(addr);
+    public SecStore(int port, Path destDir) throws IOException {
+        this(port);
         setDestinationDirectory(destDir);
     }
 
@@ -78,59 +64,59 @@ public class SecStore {
         serverCert = Files.readAllBytes(cert);
     }
 
-    public void listen() throws IOException {
-        if (destDir == null) throw new IllegalStateException("No destination directory set");
-
-        while (true) {
-            receiveFile(ssc.accept());
-        }
-    }
+//    public void listen() throws IOException {
+//        if (destDir == null) throw new IllegalStateException("No destination directory set");
+//
+//        while (true) {
+//            receiveFile(ssc.accept());
+//        }
+//    }
 
     public void listen(Handler handler) throws IOException {
-        while (true) handler.handle(ssc.accept());
+        while (true) handler.handle(sc.accept());
 
     }
 
-    private void receiveFile(SocketChannel sc) throws IOException {
-        // receive metadata
-        Metadata md = Metadata.readFrom(sc);
-        System.out.println("Received MD5 hash:   " + md.getMD5Hash().toHexString());
+//    private void receiveFile(SocketChannel sc) throws IOException {
+//        // receive metadata
+//        Metadata md = Metadata.readFrom(sc);
+//        System.out.println("Received MD5 hash:   " + md.getMD5Hash().toHexString());
+//
+//        // create output file and channel
+//        Path outputFile = destDir.resolve(md.getFileName());
+//        FileChannel fc = FileChannel.open(outputFile, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
+//
+//        // create tcp buffer
+//        ByteBuffer buffer = ByteBuffer.allocate(sc.socket().getReceiveBufferSize());
+//
+//        // receive content and write to output file
+//        ChannelWriter.writeBytes(sc, fc, buffer, md.getSize());
+//
+//        // calculate md5 hash of output file
+//        Checksum md5 = Checksum.getMD5Checksum(outputFile);
+//        System.out.println("Calculated MD5 hash: " + md5.toHexString());
+//
+//        // compare checksums and send result
+//        buffer.clear();
+//        if (md5.compareTo(md.getMD5Hash())) {
+//            System.out.println("File verified.");
+//            buffer.putLong(UPLOAD_SUCCESS);
+//            buffer.flip();
+//        } else {
+//            System.out.println("File verification failed.");
+//            buffer.putLong(0);
+//            buffer.flip();
+//        }
+//        sc.write(buffer);
+//
+//        // close socket
+//        sc.close();
+//    }
 
-        // create output file and channel
-        Path outputFile = destDir.resolve(md.getFileName());
-        FileChannel fc = FileChannel.open(outputFile, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
-
-        // create tcp buffer
-        ByteBuffer buffer = ByteBuffer.allocate(sc.socket().getReceiveBufferSize());
-
-        // receive content and write to output file
-        ChannelWriter.writeBytes(sc, fc, buffer, md.getSize());
-
-        // calculate md5 hash of output file
-        Checksum md5 = Checksum.getMD5Checksum(outputFile);
-        System.out.println("Calculated MD5 hash: " + md5.toHexString());
-
-        // compare checksums and send result
-        buffer.clear();
-        if (md5.compareTo(md.getMD5Hash())) {
-            System.out.println("File verified.");
-            buffer.putLong(UPLOAD_SUCCESS);
-            buffer.flip();
-        } else {
-            System.out.println("File verification failed.");
-            buffer.putLong(0);
-            buffer.flip();
-        }
-        sc.write(buffer);
-
-        // close socket
-        sc.close();
-    }
-
-    public void receiveConnectionSecured(SocketChannel sc) throws IOException {
+    public void receiveConnectionSecured(Socket socket) throws IOException {
         if (serverCert == null) throw new IllegalStateException();
 
-        RecordLayer recordLayer = RecordLayer.getInstance(sc);
+        RecordLayer recordLayer = RecordLayer.getInstance(socket);
 
         // receive client hello
         System.out.print("Waiting for ClientHello... ");
@@ -146,7 +132,7 @@ public class SecStore {
 
             e.printStackTrace();
 
-            sc.close();
+            socket.close();
             return;
         }
 
@@ -215,6 +201,6 @@ public class SecStore {
 
     @FunctionalInterface
     public interface Handler {
-        void handle(SocketChannel sc) throws IOException;
+        void handle(Socket socket) throws IOException;
     }
 }

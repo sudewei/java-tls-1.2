@@ -1,14 +1,13 @@
 package jiayu.tls;
 
 import java.io.IOException;
-import java.net.SocketException;
-import java.nio.channels.SocketChannel;
+import java.net.Socket;
 
 public interface RecordLayer {
     int MAX_RECORD_LENGTH = 16384;
 
-    static RecordLayer getInstance(SocketChannel sc) throws SocketException {
-        return new DefaultRecordLayerImpl(sc);
+    static RecordLayer getInstance(Socket socket) throws IOException {
+        return new DefaultRecordLayerImpl(socket);
     }
 
     GenericProtocolMessage getNextIncomingMessage() throws IOException, FatalAlertException;

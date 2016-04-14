@@ -1,31 +1,31 @@
 package jiayu.tls;
 
 import javax.xml.bind.DatatypeConverter;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.net.SocketException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.Socket;
 import java.nio.ByteBuffer;
-import java.nio.channels.Channels;
-import java.nio.channels.ReadableByteChannel;
-import java.nio.channels.SocketChannel;
-import java.nio.channels.WritableByteChannel;
-import java.util.Arrays;
 
 import static jiayu.tls.ContentType.*;
 
 class DefaultRecordLayerImpl implements RecordLayer {
-    private final SocketChannel sc;
-    private final ByteBuffer rcvBuf;
-    private final ByteBuffer sndBuf;
+    private final Socket socket;
+
+    private final OutputStream out;
+    private final InputStream in;
+
+    public final ByteBuffer rcvBuf;
 
     private ContentType leftoversType;
     private ByteQueue inputQueue;
 
-    DefaultRecordLayerImpl(SocketChannel sc) throws SocketException {
-        this.sc = sc;
-        rcvBuf = ByteBuffer.allocate(sc.socket().getReceiveBufferSize());
-        sndBuf = ByteBuffer.allocate(sc.socket().getSendBufferSize());
+    DefaultRecordLayerImpl(Socket socket) throws IOException {
+        this.socket = socket;
+        out = socket.getOutputStream();
+        in = socket.getInputStream();
+
+        rcvBuf = ByteBuffer.allocate(socket.getReceiveBufferSize());
 
         inputQueue = new ByteQueue();
     }
@@ -107,15 +107,12 @@ class DefaultRecordLayerImpl implements RecordLayer {
     }
 
     private Record getNextIncomingRecord() throws IOException {
-        System.out.println(Arrays.toString(rcvBuf.slice().array()));
-        System.out.println(rcvBuf.position());
-        System.out.println("hi");
-        while (rcvBuf.position() < 5) sc.read(rcvBuf);  // read next Record header
-        rcvBuf.flip();
-
-        ContentType incRecordType = ContentType.valueOf(rcvBuf.get());  // get next record type
-        short incRecordProtocol = rcvBuf.getShort();                    // get next record protocol
-        int incRecordLength = rcvBuf.getShort();                        // get next record length
+        ByteBuffer recordHeader = ByteBuffer.allocate(5);
+        in.read(recordHeader.array());
+        
+        ContentType incRecordType = ContentType.valueOf(recordHeader.get());  // get next record type
+        short incRecordProtocol = recordHeader.getShort();                    // get next record protocol
+        int incRecordLength = recordHeader.getShort();                        // get next record length
 
         rcvBuf.compact();
 
@@ -128,30 +125,16 @@ class DefaultRecordLayerImpl implements RecordLayer {
     }
 
     private byte[] getIncomingRecordContent(int incRecordLength) throws IOException {
-        System.out.println(incRecordLength);
-        ByteArrayOutputStream incRecordContent = new ByteArrayOutputStream(incRecordLength);
-        WritableByteChannel out = Channels.newChannel(incRecordContent);
-
-        int bytesRead = 0;
-        while (bytesRead < incRecordLength) {
-            if (!rcvBuf.hasRemaining()) sc.read(rcvBuf);
-            rcvBuf.flip();
-            if (incRecordLength - bytesRead < rcvBuf.remaining()) rcvBuf.limit(incRecordLength - bytesRead);
-            bytesRead += out.write(rcvBuf);
-            System.out.println(DatatypeConverter.printHexBinary(incRecordContent.toByteArray()));
-            rcvBuf.compact();
-            System.out.println("position after compacting: " + rcvBuf.position());
-        }
-
-        return incRecordContent.toByteArray();
+        byte[] incRecordContent = new byte[incRecordLength];
+        in.read(incRecordContent);
+        return incRecordContent;
     }
 
     @Override
     public void putNextOutgoingMessage(ProtocolMessage message) throws IOException {
         Record record = new Record(message);
         System.out.println(DatatypeConverter.printHexBinary(record.getBytes()));
-        ReadableByteChannel msg = Channels.newChannel(new ByteArrayInputStream(record.getBytes()));
-        System.out.println("outgoing record length: " + record.getBytes().length);
-        ChannelWriter.writeBytes(msg, sc, sndBuf);
+        out.write(record.getBytes());
+
     }
 }

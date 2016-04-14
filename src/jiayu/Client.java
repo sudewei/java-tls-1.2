@@ -1,18 +1,12 @@
 package jiayu;
 
 import jiayu.tls.*;
-import jiayu.tls.filetransfer.Metadata;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.net.SocketAddress;
-import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
-import java.nio.channels.SocketChannel;
+import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
@@ -24,23 +18,9 @@ public class Client {
     private static final long UPLOAD_SUCCESS = 6584997751L;
     private static final CipherSuite[] SUPPORTED_CIPHER_SUITES = new CipherSuite[]{CipherSuite.TLS_RSA_WITH_AES_128_ECB_SHA256, CipherSuite.TLS_RSA_WITH_RSA_1024_ECB_SHA256};
 
-    private final SocketAddress serverAddress;
     private X509Certificate caCert;
 
     private int sessionId;
-
-    public static void main(String[] args) throws IOException {
-        Path file = Paths.get(args[0]);
-
-        Client client = new Client(new InetSocketAddress("192.168.198.128", 4321));
-        boolean success = client.uploadFile(file);
-        if (success) System.out.println("File uploaded successfully.");
-        else System.out.println("File upload failed, please try again.");
-    }
-
-    public Client(SocketAddress serverAddress) {
-        this.serverAddress = serverAddress;
-    }
 
     public void setCACertificate(Path caCert) throws IOException, CertificateException {
         if (!Files.exists(caCert)) throw new FileNotFoundException();
@@ -50,9 +30,10 @@ public class Client {
                 .generateCertificate(Files.newInputStream(caCert));
     }
 
-    public void connectSecured() throws IOException {
-        SocketChannel sc = SocketChannel.open(serverAddress);
-        RecordLayer recordLayer = RecordLayer.getInstance(sc);
+    public void connectSecured(String serverAddress, int port) throws IOException {
+        Socket socket = new Socket(serverAddress, port);
+
+        RecordLayer recordLayer = RecordLayer.getInstance(socket);
 
 //        ByteBuffer sndBuf = ByteBuffer.allocate(sc.socket().getSendBufferSize());
 //        ByteBuffer rcvBuf = ByteBuffer.allocate(sc.socket().getReceiveBufferSize());
@@ -190,46 +171,46 @@ public class Client {
 //        }
     }
 
-    public boolean uploadFile(Path file) throws IOException {
-        // ensure file exists and is a regular file
-        if (!Files.exists(file)) throw new FileNotFoundException();
-        if (!Files.isRegularFile(file)) throw new IllegalArgumentException();
-
-        // prepare file metadata
-        Metadata md = Metadata.get(file);
-
-        // create FileChannel
-        FileChannel content = FileChannel.open(file);
-
-        // open socket to serverAddress
-        SocketChannel sc = SocketChannel.open(serverAddress);
-
-        // create tcp buffer
-        ByteBuffer buffer = ByteBuffer.allocate(sc.socket().getSendBufferSize());
-
-//        // send metadata
-//        ChannelWriter.writeBytes(md.toReadableByteChannel(), sc, buffer);
+//    public boolean uploadFile(Path file) throws IOException {
+//        // ensure file exists and is a regular file
+//        if (!Files.exists(file)) throw new FileNotFoundException();
+//        if (!Files.isRegularFile(file)) throw new IllegalArgumentException();
 //
-//        // send content
-//        ChannelWriter.writeBytes(content, sc, buffer);
-
-        // fluent interface implementation
-        ChannelWriter.get(sc, buffer)
-                .write(md.toReadableByteChannel())
-                .write(content);
-
-        // test receive confirmation
-        buffer.clear();
-        sc.read(buffer);
-        buffer.flip();
-        long success = buffer.getLong();
-
-        // close socket
-        sc.close();
-
-        // return true for success
-        return success == UPLOAD_SUCCESS;
-    }
+//        // prepare file metadata
+//        Metadata md = Metadata.get(file);
+//
+//        // create FileChannel
+//        FileChannel content = FileChannel.open(file);
+//
+//        // open socket to serverAddress
+//        SocketChannel sc = SocketChannel.open(serverAddress);
+//
+//        // create tcp buffer
+//        ByteBuffer buffer = ByteBuffer.allocate(sc.socket().getSendBufferSize());
+//
+////        // send metadata
+////        ChannelWriter.writeBytes(md.toReadableByteChannel(), sc, buffer);
+////
+////        // send content
+////        ChannelWriter.writeBytes(content, sc, buffer);
+//
+//        // fluent interface implementation
+//        ChannelWriter.get(sc, buffer)
+//                .write(md.toReadableByteChannel())
+//                .write(content);
+//
+//        // test receive confirmation
+//        buffer.clear();
+//        sc.read(buffer);
+//        buffer.flip();
+//        long success = buffer.getLong();
+//
+//        // close socket
+//        sc.close();
+//
+//        // return true for success
+//        return success == UPLOAD_SUCCESS;
+//    }
 
 }
 
