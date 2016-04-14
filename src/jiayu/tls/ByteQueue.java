@@ -72,4 +72,8 @@ public class ByteQueue {
 
         buffer = newBuffer;
     }
+
+    public byte[] array() {
+        return Arrays.copyOf(buffer, buffer.length);
+    }
 }

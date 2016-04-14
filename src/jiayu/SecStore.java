@@ -87,7 +87,7 @@ public class SecStore {
     }
 
     public void listen(Handler handler) throws IOException {
-        handler.handle(ssc.accept());
+        while (true) handler.handle(ssc.accept());
 
     }
 

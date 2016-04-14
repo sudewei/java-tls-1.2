@@ -10,6 +10,7 @@ import java.nio.channels.Channels;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.channels.WritableByteChannel;
+import java.sql.DataTruncation;
 
 import static jiayu.tls.ContentType.*;
 
@@ -41,6 +42,8 @@ class DefaultRecordLayerImpl implements RecordLayer {
         } else {
             nextMsgType = leftoversType;
         }
+
+        System.out.println("RECORD LAYER: " + DatatypeConverter.printHexBinary(inputQueue.array()));
 
         switch (nextMsgType) {
             case CHANGE_CIPHER_SPEC:
@@ -133,6 +136,7 @@ class DefaultRecordLayerImpl implements RecordLayer {
         Record record = new Record(message);
         System.out.println(DatatypeConverter.printHexBinary(record.getBytes()));
         ReadableByteChannel msg = Channels.newChannel(new ByteArrayInputStream(record.getBytes()));
+        System.out.println("outgoing record length: " + record.getBytes().length);
         ChannelWriter.writeBytes(msg, sc, sndBuf);
     }
 }

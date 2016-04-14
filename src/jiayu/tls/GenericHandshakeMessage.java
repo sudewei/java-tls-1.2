@@ -10,7 +10,7 @@ public class GenericHandshakeMessage {
     public GenericHandshakeMessage(byte[] content) throws FatalAlertException {
         type = HandshakeType.valueOf(content[0]);
         length = UInt.btoi(Arrays.copyOfRange(content, 1, 4));
-        this.content = Arrays.copyOfRange(content, 5, content.length);
+        this.content = Arrays.copyOfRange(content, 4, content.length);
     }
 
     public HandshakeType getType() {

@@ -1,5 +1,6 @@
 package jiayu.tls;
 
+import javax.xml.bind.DatatypeConverter;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
@@ -119,6 +120,8 @@ public class ClientHello extends Handshake {
             throw new FatalAlertException(AlertDescription.UNEXPECTED_MESSAGE);
 
         int length = handshake.getLength();
+        System.out.println(DatatypeConverter.printHexBinary(handshake.getContent()));
+
         ByteBuffer content = ByteBuffer.wrap(handshake.getContent());
 
         short clientVersion = content.getShort();                           // get 2 content

@@ -27,7 +27,7 @@ public class CertificateList implements Vector<ASN1Cert> {
         }
 
         this.certificatesLength = certificatesLength;
-        this.length = UInt.itob(LENGTH_BYTES + certificatesLength, LENGTH_BYTES);
+        this.length = UInt.itob(certificatesLength, LENGTH_BYTES);
     }
 
 
