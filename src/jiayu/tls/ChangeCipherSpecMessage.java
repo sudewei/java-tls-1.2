@@ -26,20 +26,6 @@ public class ChangeCipherSpecMessage implements ProtocolMessage {
         return new ChangeCipherSpecMessage();
     }
 
-    public static ChangeCipherSpecMessage tryToReadFrom(ReadableByteChannel src) throws IOException, UnexpectedMessageException {
-        Record record = Record.readFrom(src);
-
-        if (record.getContentType() != ContentType.CHANGE_CIPHER_SPEC) {
-            throw new UnexpectedMessageException();
-        }
-
-        if (!Arrays.equals(record.getContent(), CHANGE_CIPHER_SPEC)) {
-            throw new UnexpectedMessageException();
-        }
-
-        return createFrom(record);
-    }
-
     @Override
     public ContentType getContentType() {
         return ContentType.CHANGE_CIPHER_SPEC;

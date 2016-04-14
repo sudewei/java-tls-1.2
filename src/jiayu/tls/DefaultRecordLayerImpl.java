@@ -78,9 +78,9 @@ class DefaultRecordLayerImpl implements RecordLayer {
                 return new GenericProtocolMessage(HANDSHAKE, incHandshakeContent);
             case APPLICATION_DATA:
                 // TODO: 13/04/2016
-                return new Message(APPLICATION_DATA, (byte) 0x00);
+                return new GenericProtocolMessage(APPLICATION_DATA, new byte[0]);
             default:
-                throw new UnexpectedMessageException();
+                throw new FatalAlertException(AlertDescription.DECODE_ERROR);
         }
     }
 
@@ -89,7 +89,7 @@ class DefaultRecordLayerImpl implements RecordLayer {
      *
      * @param nextMsgType The expected content type of the next record
      * @throws IOException If an I/O error occurs
-     * @throws UnexpectedMessageException If the content type of the next record is not what was expected
+     * @throws FatalAlertException If the content type of the next record is not what was expected
      */
     private void updateInputQueue(ContentType nextMsgType) throws IOException, FatalAlertException {
         Record nextRecord = getNextIncomingRecord();

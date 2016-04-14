@@ -1,6 +1,6 @@
 package jiayu.tls;
 
-public class Message implements GenericProtocolMessage {
+public class Message {
     private final ContentType contentType;
     private final byte[] content;
 
@@ -9,12 +9,10 @@ public class Message implements GenericProtocolMessage {
         this.content = content;
     }
 
-    @Override
     public ContentType getContentType() {
         return contentType;
     }
 
-    @Override
     public byte[] getContent() {
         return content;
     }

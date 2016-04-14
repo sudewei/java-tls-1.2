@@ -214,7 +214,7 @@ public class SecStore {
     }
 
     @FunctionalInterface
-    interface Handler {
+    public interface Handler {
         void handle(SocketChannel sc) throws IOException;
     }
 }
