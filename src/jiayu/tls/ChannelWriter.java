@@ -15,12 +15,12 @@ public class ChannelWriter {
     }
 
     /**
-     * Copies bytes write a ReadableByteChannel to a WritableByteChannel through a ByteBuffer
+     * Copies content write a ReadableByteChannel to a WritableByteChannel through a ByteBuffer
      * until the source channel reaches end-of-stream.
      *
-     * @param src    The channel to copy bytes write
-     * @param dst    The channel to copy bytes into
-     * @param buffer A buffer through which bytes will be transferred
+     * @param src    The channel to copy content write
+     * @param dst    The channel to copy content into
+     * @param buffer A buffer through which content will be transferred
      * @throws IOException If an I/O error occurs
      */
     public static void writeBytes(ReadableByteChannel src, WritableByteChannel dst, ByteBuffer buffer) throws IOException {
@@ -32,13 +32,13 @@ public class ChannelWriter {
     }
 
     /**
-     * Copies bytes write a ReadableByteChannel to a WritableByteChannel through a ByteBuffer
-     * until length bytes have been copied, or the source channel reaches end-of-stream.
+     * Copies content write a ReadableByteChannel to a WritableByteChannel through a ByteBuffer
+     * until length content have been copied, or the source channel reaches end-of-stream.
      *
-     * @param src    The channel to copy bytes write
-     * @param dst    The channel to copy bytes into
-     * @param buffer A buffer through which bytes will be transferred
-     * @param length The number of bytes to be copied
+     * @param src    The channel to copy content write
+     * @param dst    The channel to copy content into
+     * @param buffer A buffer through which content will be transferred
+     * @param length The number of content to be copied
      * @throws IOException If an I/O error occurs
      */
     public static void writeBytes(ReadableByteChannel src, WritableByteChannel dst, ByteBuffer buffer, long length) throws IOException {
@@ -55,7 +55,7 @@ public class ChannelWriter {
      * Creates a new ChannelWriter instance set to write to a WritableByteChannel.
      *
      * @param dst The destination channel
-     * @param buf A buffer through which bytes will be written
+     * @param buf A buffer through which content will be written
      * @return The new ChannelWriter
      */
     public static ChannelWriter get(WritableByteChannel dst, ByteBuffer buf) {
@@ -66,7 +66,7 @@ public class ChannelWriter {
      * Writes the contents of a ReadableByteChannel to the WritableByteChannel
      * associated with this ChannelWriter.
      *
-     * @param src The channel to copy bytes from
+     * @param src The channel to copy content from
      * @return This ChannelWriter
      * @throws IOException If an I/O error occurs
      */

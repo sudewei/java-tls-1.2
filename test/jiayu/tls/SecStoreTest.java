@@ -1,5 +1,6 @@
 package jiayu.tls;
 
+import jiayu.SecStore;
 import org.junit.Test;
 
 import java.net.InetSocketAddress;
