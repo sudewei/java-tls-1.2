@@ -10,7 +10,7 @@ import java.nio.channels.Channels;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.channels.WritableByteChannel;
-import java.sql.DataTruncation;
+import java.util.Arrays;
 
 import static jiayu.tls.ContentType.*;
 
@@ -31,6 +31,8 @@ class DefaultRecordLayerImpl implements RecordLayer {
     }
 
     public GenericProtocolMessage getNextIncomingMessage() throws IOException, FatalAlertException {
+        System.out.println("GETTING NEXT MESSge");
+
         // invariant: contents of next record or leftoverbytes are a new handshake layer message from the beginning
         ContentType nextMsgType;
 
@@ -67,10 +69,12 @@ class DefaultRecordLayerImpl implements RecordLayer {
                 // we need to read the header of the incoming message to find out how long it is
                 // but if the entire header has not been received yet,
                 // we get more content from the next incoming record
+                System.out.println("input queue size" + inputQueue.size());
                 while (inputQueue.size() < Handshake.HEADER_LENGTH) updateInputQueue(HANDSHAKE);
 
                 byte[] length = inputQueue.peek(3, 1);  // handshake length field is 3 content long
                 int incHandshakeLength = UInt.btoi(length);
+                System.out.println("incoming handshake length: " + incHandshakeLength);
 
                 // if the entire of the incoming handshake is not in the input queue yet,
                 // we get more content from the next incoming record
@@ -95,6 +99,7 @@ class DefaultRecordLayerImpl implements RecordLayer {
      * @throws FatalAlertException If the content type of the next record is not what was expected
      */
     private void updateInputQueue(ContentType nextMsgType) throws IOException, FatalAlertException {
+        System.out.println("update input queue");
         Record nextRecord = getNextIncomingRecord();
         if (nextRecord.getContentType() != nextMsgType)
             throw new FatalAlertException(AlertDescription.UNEXPECTED_MESSAGE);
@@ -102,6 +107,9 @@ class DefaultRecordLayerImpl implements RecordLayer {
     }
 
     private Record getNextIncomingRecord() throws IOException {
+        System.out.println(Arrays.toString(rcvBuf.slice().array()));
+        System.out.println(rcvBuf.position());
+        System.out.println("hi");
         while (rcvBuf.position() < 5) sc.read(rcvBuf);  // read next Record header
         rcvBuf.flip();
 
@@ -113,19 +121,26 @@ class DefaultRecordLayerImpl implements RecordLayer {
 
         byte[] incRecordContent = getIncomingRecordContent(incRecordLength);
 
+        System.out.println(DatatypeConverter.printHexBinary(incRecordContent));
+        System.out.println(incRecordContent.length);
+
         return new Record(incRecordType, incRecordProtocol, incRecordContent);
     }
 
     private byte[] getIncomingRecordContent(int incRecordLength) throws IOException {
+        System.out.println(incRecordLength);
         ByteArrayOutputStream incRecordContent = new ByteArrayOutputStream(incRecordLength);
-        WritableByteChannel in = Channels.newChannel(incRecordContent);
+        WritableByteChannel out = Channels.newChannel(incRecordContent);
 
         int bytesRead = 0;
         while (bytesRead < incRecordLength) {
             if (!rcvBuf.hasRemaining()) sc.read(rcvBuf);
             rcvBuf.flip();
-            bytesRead += in.write(rcvBuf);
+            if (incRecordLength - bytesRead < rcvBuf.remaining()) rcvBuf.limit(incRecordLength - bytesRead);
+            bytesRead += out.write(rcvBuf);
+            System.out.println(DatatypeConverter.printHexBinary(incRecordContent.toByteArray()));
             rcvBuf.compact();
+            System.out.println("position after compacting: " + rcvBuf.position());
         }
 
         return incRecordContent.toByteArray();

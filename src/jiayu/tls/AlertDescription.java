@@ -6,7 +6,7 @@ public enum AlertDescription {
     CLOSE_NOTIFY(0), UNEXPECTED_MESSAGE(10), HANDSHAKE_FAILURE(40), BAD_CERTIFICATE(42),
     CERTIFICATE_EXPIRED(45), DECODE_ERROR(50), DECRYPT_ERROR(51), INTERNAL_ERROR(80);
 
-    private static HashMap<Byte, AlertDescription> map;
+    private static HashMap<Byte, AlertDescription> map = new HashMap<>();
 
     static {
         for (AlertDescription desc : values()) map.put(desc.value, desc);
