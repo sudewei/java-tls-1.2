@@ -8,7 +8,7 @@ import java.nio.file.Paths;
 public class SecStoreTest {
     @Test
     public void receiveConnectionSecured() throws Exception {
-        SecStore secStore = new SecStore(443);
+        SecStore secStore = new SecStore(4443);
         secStore.setServerCert(Paths.get("misc/certs/servercert.crt"));
         secStore.setServerKey(Paths.get("misc/certs/serverkey.der"));
         secStore.listen(secStore::receiveConnectionSecured);

@@ -1,17 +1,49 @@
 package jiayu.tls;
 
-interface HandshakeMessage {
-    HandshakeType getType();
+import java.nio.ByteBuffer;
 
-    int getLength();
+public abstract class HandshakeMessage implements ProtocolMessage {
+    public static final ContentType CONTENT_TYPE = ContentType.HANDSHAKE;
+    public static final int HEADER_LENGTH = 4;
 
-    byte[] getContent();
+    private final HandshakeType handshakeType;
 
-    ClientHello asClientHello() throws FatalAlertException;
+    HandshakeMessage(HandshakeType handshakeType) {
+        this.handshakeType = handshakeType;
+    }
 
-    ServerHello asServerHello() throws FatalAlertException;
+    byte[] createHeader(int length) {
+        return ByteBuffer.allocate(HEADER_LENGTH)
+                .put(handshakeType.value)
+                .put(UInt.itob(length, 3))
+                .array();
+    }
 
-    Certificate asCertificate() throws FatalAlertException;
+    static int interpretHeader(ByteBuffer content, HandshakeType expectedType) throws FatalAlertException {
+        byte type = content.get();
+        byte[] lengthBytes = new byte[3];
+        content.get(lengthBytes);
 
-    ServerHelloDone asServerHelloDone();
+        if (HandshakeType.valueOf(type) != expectedType)
+            throw new FatalAlertException(AlertDescription.UNEXPECTED_MESSAGE);
+
+        return UInt.btoi(lengthBytes);
+    }
+
+    HandshakeType getHandshakeType(GenericHandshakeMessage handshake) {
+        return handshake.getType();
+    }
+
+    int getHandshakeLength(GenericHandshakeMessage handshake) {
+        return handshake.getLength();
+    }
+
+    byte[] getHandshakeContent(GenericHandshakeMessage handshake) {
+        return handshake.getContent();
+    }
+
+    @Override
+    public ContentType getContentType() {
+        return ContentType.HANDSHAKE;
+    }
 }

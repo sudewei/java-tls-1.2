@@ -1,6 +1,6 @@
 package jiayu.tls;
 
-public class Finished extends Handshake {
+public class Finished extends HandshakeMessage {
     Finished() {
         super(HandshakeType.FINISHED);
     }

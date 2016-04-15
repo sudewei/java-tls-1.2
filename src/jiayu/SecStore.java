@@ -123,48 +123,43 @@ public class SecStore {
         System.out.flush();
         ClientHello clientHello;
         try {
-            clientHello = recordLayer.getNextIncomingMessage().asHandshakeMessage().asClientHello();
+            clientHello = (ClientHello) recordLayer.getNextIncomingMessage()
+                    .asHandshakeMessage(HandshakeType.CLIENT_HELLO);
             System.out.println("Received.");
             System.out.println(clientHello);
+
+            // choose cipher suite
+            System.out.print("Choosing cipher suite... ");
+            System.out.flush();
+            CipherSuite selectedCipherSuite = Arrays.asList(clientHello.getCipherSuites()).contains(preferredCipherSuite)
+                    ? preferredCipherSuite
+                    : clientHello.getCipherSuites()[0];
+            System.out.println("Selected cipher suite: " + selectedCipherSuite.name());
+
+            // send server hello
+            System.out.print("Sending ServerHello... ");
+            System.out.flush();
+            ServerHello serverHello = new ServerHello(selectedCipherSuite);
+            recordLayer.putNextOutgoingMessage(serverHello);
+            System.out.println("Done.");
+
+            // send server serverCert
+            System.out.print("Sending Certificate... ");
+            System.out.flush();
+            Certificate certificate = new Certificate(new ASN1Cert(this.serverCert));
+            recordLayer.putNextOutgoingMessage(certificate);
+            System.out.println("Done.");
+
+            // send server hello done
+            System.out.print("Sending ServerHelloDone... ");
+            System.out.flush();
+            ServerHelloDone serverHelloDone = new ServerHelloDone();
+            recordLayer.putNextOutgoingMessage(serverHelloDone);
+            System.out.println("Done.");
+
         } catch (FatalAlertException e) {
-//            cw.write(AlertMessage.unexpectedMessageAlert());
-            System.out.println("Unexpected message!");
-
             e.printStackTrace();
-
-            socket.close();
-            return;
         }
-
-        // choose cipher suite
-        System.out.print("Choosing cipher suite... ");
-        System.out.flush();
-        CipherSuite selectedCipherSuite = Arrays.asList(clientHello.getCipherSuites()).contains(preferredCipherSuite)
-                ? preferredCipherSuite
-                : clientHello.getCipherSuites()[0];
-        System.out.println("Selected cipher suite: " + selectedCipherSuite.name());
-
-        // send server hello
-        System.out.print("Sending ServerHello... ");
-        System.out.flush();
-        ServerHello serverHello = new ServerHello(selectedCipherSuite);
-        recordLayer.putNextOutgoingMessage(serverHello);
-        System.out.println("Done.");
-
-        // send server serverCert
-        System.out.print("Sending Certificate... ");
-        System.out.flush();
-        Certificate certificate = new Certificate(new ASN1Cert(this.serverCert));
-        recordLayer.putNextOutgoingMessage(certificate);
-        System.out.println("Done.");
-
-        // send server hello done
-        System.out.print("Sending ServerHelloDone... ");
-        System.out.flush();
-        ServerHelloDone serverHelloDone = new ServerHelloDone();
-        recordLayer.putNextOutgoingMessage(serverHelloDone);
-        System.out.println("Done.");
-
 //        // receive ClientKeyExchange
 //        System.out.print("Receiving ClientKeyExchange... ");
 //        ClientKeyExchange clientKeyExchange = ClientKeyExchange.tryToReadFrom(sc);

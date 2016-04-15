@@ -10,7 +10,7 @@ import java.util.Arrays;
  * Standards based as far as possible, lacking in support for compression methods (defaults to no compression)
  * and extensions (not supported).
  */
-public class ClientHello extends Handshake {
+public class ClientHello extends HandshakeMessage {
     private static final short CLIENT_VERSION = 0x0303;
     private static final byte[] COMPRESSION_METHODS = new byte[]{(byte) 0x00};
 
@@ -115,7 +115,7 @@ public class ClientHello extends Handshake {
      * @return The extracted ClientHello
      * @throws FatalAlertException If a fatal error occurred while interpreting the handshake
      */
-    public static ClientHello interpret(GenericHandshakeMessage handshake) throws FatalAlertException {
+    static ClientHello interpret(GenericHandshakeMessage handshake) throws FatalAlertException {
         if (handshake.getType() != HandshakeType.CLIENT_HELLO)
             throw new FatalAlertException(AlertDescription.UNEXPECTED_MESSAGE);
 

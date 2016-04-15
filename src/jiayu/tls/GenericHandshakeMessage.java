@@ -24,28 +24,4 @@ public class GenericHandshakeMessage {
     public byte[] getContent() {
         return content;
     }
-
-    public ClientHello asClientHello() throws FatalAlertException {
-        return ClientHello.interpret(this);
-    }
-
-    public ServerHello asServerHello() throws FatalAlertException {
-        return ServerHello.interpret(this);
-    }
-
-    public Certificate asCertificate() throws FatalAlertException {
-        return Certificate.interpret(this);
-    }
-
-    public ServerHelloDone asServerHelloDone() throws FatalAlertException {
-        return ServerHelloDone.interpret(this);
-    }
-//
-//    ClientKeyExchange asClientKeyExchange() {
-//
-//    }
-//
-//    Finished asFinished() {
-//
-//    }
 }

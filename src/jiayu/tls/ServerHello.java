@@ -4,7 +4,7 @@ import java.nio.ByteBuffer;
 import java.security.SecureRandom;
 import java.util.Arrays;
 
-public class ServerHello extends Handshake {
+public class ServerHello extends HandshakeMessage {
     private static final short SERVER_VERSION = 0x0303;
     private static final byte COMPRESSION_METHOD = 0x00;
 

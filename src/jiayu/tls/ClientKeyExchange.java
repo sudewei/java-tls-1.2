@@ -2,7 +2,7 @@ package jiayu.tls;
 
 import java.nio.ByteBuffer;
 
-public class ClientKeyExchange extends Handshake {
+public class ClientKeyExchange extends HandshakeMessage {
     private byte[] encryptedPremasterSecret;
 
     private ClientKeyExchange() {

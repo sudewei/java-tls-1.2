@@ -2,7 +2,7 @@ package jiayu.tls;
 
 import java.util.HashMap;
 
-enum HandshakeType {
+public enum HandshakeType {
     CLIENT_HELLO(1), SERVER_HELLO(2), CERTIFICATE(11),
     SERVER_HELLO_DONE(14), CLIENT_KEY_EXCHANGE(16), FINISHED(20);
 

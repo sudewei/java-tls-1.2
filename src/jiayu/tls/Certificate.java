@@ -4,7 +4,7 @@ import java.nio.ByteBuffer;
 
 // FIXME: 13/04/2016 IMPLEMENT CERTIFICATE CHAIN LENGTH AND CERTIFICATE LENGTH
 
-public class Certificate extends Handshake {
+public class Certificate extends HandshakeMessage {
     private final int length;
     private final byte[] header;
 

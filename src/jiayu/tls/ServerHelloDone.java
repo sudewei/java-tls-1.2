@@ -1,6 +1,6 @@
 package jiayu.tls;
 
-public class ServerHelloDone extends Handshake {
+public class ServerHelloDone extends HandshakeMessage {
     public ServerHelloDone() {
         super(HandshakeType.SERVER_HELLO_DONE);
     }

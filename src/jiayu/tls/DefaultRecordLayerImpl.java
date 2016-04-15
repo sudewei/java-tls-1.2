@@ -1,9 +1,6 @@
 package jiayu.tls;
 
-import javax.xml.bind.DatatypeConverter;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.*;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 
@@ -12,27 +9,21 @@ import static jiayu.tls.ContentType.*;
 class DefaultRecordLayerImpl implements RecordLayer {
     private final Socket socket;
 
-    private final OutputStream out;
-    private final InputStream in;
-
-    public final ByteBuffer rcvBuf;
+    private final DataOutputStream out;
+    private final DataInputStream in;
 
     private ContentType leftoversType;
     private ByteQueue inputQueue;
 
     DefaultRecordLayerImpl(Socket socket) throws IOException {
         this.socket = socket;
-        out = socket.getOutputStream();
-        in = socket.getInputStream();
-
-        rcvBuf = ByteBuffer.allocate(socket.getReceiveBufferSize());
+        out = new DataOutputStream(socket.getOutputStream());
+        in = new DataInputStream(socket.getInputStream());
 
         inputQueue = new ByteQueue();
     }
 
     public GenericProtocolMessage getNextIncomingMessage() throws IOException, FatalAlertException {
-        System.out.println("GETTING NEXT MESSge");
-
         // invariant: contents of next record or leftoverbytes are a new handshake layer message from the beginning
         ContentType nextMsgType;
 
@@ -44,8 +35,6 @@ class DefaultRecordLayerImpl implements RecordLayer {
         } else {
             nextMsgType = leftoversType;
         }
-
-        System.out.println("RECORD LAYER: " + DatatypeConverter.printHexBinary(inputQueue.array()));
 
         switch (nextMsgType) {
             case CHANGE_CIPHER_SPEC:
@@ -69,18 +58,16 @@ class DefaultRecordLayerImpl implements RecordLayer {
                 // we need to read the header of the incoming message to find out how long it is
                 // but if the entire header has not been received yet,
                 // we get more content from the next incoming record
-                System.out.println("input queue size" + inputQueue.size());
-                while (inputQueue.size() < Handshake.HEADER_LENGTH) updateInputQueue(HANDSHAKE);
+                while (inputQueue.size() < HandshakeMessage.HEADER_LENGTH) updateInputQueue(HANDSHAKE);
 
                 byte[] length = inputQueue.peek(3, 1);  // handshake length field is 3 content long
                 int incHandshakeLength = UInt.btoi(length);
-                System.out.println("incoming handshake length: " + incHandshakeLength);
 
                 // if the entire of the incoming handshake is not in the input queue yet,
                 // we get more content from the next incoming record
-                while (inputQueue.size() < Handshake.HEADER_LENGTH + incHandshakeLength) updateInputQueue(nextMsgType);
+                while (inputQueue.size() < HandshakeMessage.HEADER_LENGTH + incHandshakeLength) updateInputQueue(nextMsgType);
 
-                byte[] incHandshakeContent = inputQueue.dequeue(Handshake.HEADER_LENGTH + incHandshakeLength);
+                byte[] incHandshakeContent = inputQueue.dequeue(HandshakeMessage.HEADER_LENGTH + incHandshakeLength);
                 if (!inputQueue.isEmpty()) leftoversType = HANDSHAKE;
                 return new GenericProtocolMessage(HANDSHAKE, incHandshakeContent);
             case APPLICATION_DATA:
@@ -99,7 +86,6 @@ class DefaultRecordLayerImpl implements RecordLayer {
      * @throws FatalAlertException If the content type of the next record is not what was expected
      */
     private void updateInputQueue(ContentType nextMsgType) throws IOException, FatalAlertException {
-        System.out.println("update input queue");
         Record nextRecord = getNextIncomingRecord();
         if (nextRecord.getContentType() != nextMsgType)
             throw new FatalAlertException(AlertDescription.UNEXPECTED_MESSAGE);
@@ -108,32 +94,22 @@ class DefaultRecordLayerImpl implements RecordLayer {
 
     private Record getNextIncomingRecord() throws IOException {
         ByteBuffer recordHeader = ByteBuffer.allocate(5);
-        in.read(recordHeader.array());
-        
+        // TODO: 15/04/2016 handle eofexception
+        in.readFully(recordHeader.array());
+
         ContentType incRecordType = ContentType.valueOf(recordHeader.get());  // get next record type
         short incRecordProtocol = recordHeader.getShort();                    // get next record protocol
         int incRecordLength = recordHeader.getShort();                        // get next record length
 
-        rcvBuf.compact();
-
-        byte[] incRecordContent = getIncomingRecordContent(incRecordLength);
-
-        System.out.println(DatatypeConverter.printHexBinary(incRecordContent));
-        System.out.println(incRecordContent.length);
+        byte[] incRecordContent = new byte[incRecordLength];
+        in.readFully(incRecordContent);
 
         return new Record(incRecordType, incRecordProtocol, incRecordContent);
-    }
-
-    private byte[] getIncomingRecordContent(int incRecordLength) throws IOException {
-        byte[] incRecordContent = new byte[incRecordLength];
-        in.read(incRecordContent);
-        return incRecordContent;
     }
 
     @Override
     public void putNextOutgoingMessage(ProtocolMessage message) throws IOException {
         Record record = new Record(message);
-        System.out.println(DatatypeConverter.printHexBinary(record.getBytes()));
         out.write(record.getBytes());
 
     }

@@ -50,7 +50,8 @@ public class Client {
         System.out.print("Waiting for ServerHello... ");
         System.out.flush();
         try {
-            ServerHello serverHello = recordLayer.getNextIncomingMessage().asHandshakeMessage().asServerHello();
+            ServerHello serverHello = (ServerHello) recordLayer.getNextIncomingMessage()
+                    .asHandshakeMessage(HandshakeType.SERVER_HELLO);
             System.out.println("Received.");
         } catch (FatalAlertException e) {
             e.printStackTrace();
@@ -59,7 +60,8 @@ public class Client {
         System.out.print("Waiting for Certificate... ");
         System.out.flush();
         try {
-            Certificate certificate = recordLayer.getNextIncomingMessage().asHandshakeMessage().asCertificate();
+            Certificate certificate = (Certificate) recordLayer.getNextIncomingMessage()
+                    .asHandshakeMessage(HandshakeType.CERTIFICATE);
             System.out.println("Received.");
         } catch (FatalAlertException e) {
             e.printStackTrace();
@@ -68,33 +70,13 @@ public class Client {
         System.out.print("Waiting for ServerHelloDone... ");
         System.out.flush();
         try {
-            ServerHelloDone serverHelloDone =
-                    recordLayer.getNextIncomingMessage().asHandshakeMessage().asServerHelloDone();
+            ServerHelloDone serverHelloDone = (ServerHelloDone) recordLayer.getNextIncomingMessage()
+                    .asHandshakeMessage(HandshakeType.SERVER_HELLO_DONE);
             System.out.println("Received.");
         } catch (FatalAlertException e) {
             e.printStackTrace();
         }
 
-//        try {
-//            // receive server hello
-//            System.out.print("Waiting for server hello... ");
-//            ServerHello serverHello;
-//            serverHello = ServerHello.tryToReadFrom(sc);
-//            System.out.println("Received");
-//
-//            // receive server certificate
-//            System.out.print("Waiting for server certificate... ");
-//            Certificate certificate = Certificate.tryToReadFrom(sc);
-//            System.out.println("Received.");
-//            System.out.println(new String(certificate.getCertificateList()));
-//
-//            // wait for server hello done
-//            System.out.print("Waiting for ServerHelloDone... ");
-//            ServerHelloDone serverHelloDone = ServerHelloDone.tryToReadFrom(sc);
-//            System.out.println("Received.");
-//
-//            CipherSuite selectedCipherSuite = serverHello.getCipherSuite();
-//
 //            // authenticate server certificate
 //            System.out.print("Authenticating server certificate... ");
 //            X509Certificate serverCert = (X509Certificate) CertificateFactory.getInstance("X.509").generateCertificate(new ByteArrayInputStream(certificate.getCertificateList()));
