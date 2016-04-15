@@ -1,4 +1,7 @@
 package jiayu.tls;
 
-public abstract class TLSException extends Exception {
+abstract class TLSException extends Exception {
+    TLSException(String message) {
+        super(message);
+    }
 }

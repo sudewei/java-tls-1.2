@@ -2,14 +2,24 @@ package jiayu;
 
 import jiayu.tls.*;
 
+import javax.crypto.BadPaddingException;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
+import java.io.ByteArrayInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
+import java.security.SignatureException;
 import java.security.cert.CertificateException;
+import java.security.cert.CertificateExpiredException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.util.Arrays;
 
 public class Client {
     public static final short CLIENT_VERSION = 0x0303;
@@ -53,67 +63,88 @@ public class Client {
             ServerHello serverHello = (ServerHello) recordLayer.getNextIncomingMessage()
                     .asHandshakeMessage(HandshakeType.SERVER_HELLO);
             System.out.println("Received.");
-        } catch (FatalAlertException e) {
-            e.printStackTrace();
-        }
 
-        System.out.print("Waiting for Certificate... ");
-        System.out.flush();
-        try {
+
+            // receive server certificate
+            System.out.print("Waiting for Certificate... ");
+            System.out.flush();
             Certificate certificate = (Certificate) recordLayer.getNextIncomingMessage()
                     .asHandshakeMessage(HandshakeType.CERTIFICATE);
             System.out.println("Received.");
-        } catch (FatalAlertException e) {
-            e.printStackTrace();
-        }
 
-        System.out.print("Waiting for ServerHelloDone... ");
-        System.out.flush();
-        try {
+
+            // wait for serverhellodone
+            System.out.print("Waiting for ServerHelloDone... ");
+            System.out.flush();
             ServerHelloDone serverHelloDone = (ServerHelloDone) recordLayer.getNextIncomingMessage()
                     .asHandshakeMessage(HandshakeType.SERVER_HELLO_DONE);
             System.out.println("Received.");
+
+            // authenticate server certificate
+            // FIXME: 15/04/2016 authenticates each cert individually instead of as a chain
+            /*
+                I need to check each certificate against the next cert in the certificate list
+                if the certificate is the last ecrt in the certificate list
+                we check it against the cacert instead
+
+                the server cert is always the first certificate in the list
+             */
+            System.out.println("Authenticating server certificates... ");
+            CertificateList certChain = certificate.getCertificateList();
+            X509Certificate serverCert = null;
+            X509Certificate prev = null;
+            X509Certificate current;
+            try {
+                for (ASN1Cert asn1Cert : certChain.getContents()) {
+                    if (prev == null) {
+                        serverCert = (X509Certificate) CertificateFactory.getInstance("X.509").generateCertificate(new ByteArrayInputStream(asn1Cert.getContent()));
+                        System.out.println("Server DN: " + serverCert.getSubjectX500Principal().getName());
+                        serverCert.checkValidity();
+                        prev = serverCert;
+                    } else {
+                        current = (X509Certificate) CertificateFactory.getInstance("X.509").generateCertificate(new ByteArrayInputStream(asn1Cert.getContent()));
+                        System.out.println("Current DN: " + current.getSubjectX500Principal().getName());
+                        current.checkValidity();
+                        prev.verify(current.getPublicKey());
+                    }
+                }
+                assert prev != null;
+                prev.verify(caCert.getPublicKey());
+
+                System.out.println("Authenticated.");
+
+                // generate and send pre-master key
+                CipherSuite selectedCipherSuite = serverHello.getCipherSuite();
+                PremasterSecret premasterSecret;
+                ClientKeyExchange clientKeyExchange;
+                if (selectedCipherSuite.keyExchangeAlgorithm.equals("RSA")) {
+                    premasterSecret = PremasterSecret.newRSAPremasterSecret(CLIENT_VERSION);
+                    clientKeyExchange = new ClientKeyExchange(premasterSecret.getEncryptedBytes(serverCert));
+                    recordLayer.putNextOutgoingMessage(clientKeyExchange);
+                    System.out.println("Done.");
+                    System.out.println("Unencypted premaster secret: " + Arrays.toString(premasterSecret.toBytes()));
+                    System.out.println("Premaster secret length: " + premasterSecret.toBytes().length);
+                } else {
+                    throw new FatalAlertException(AlertDescription.INTERNAL_ERROR);
+                }
+            } catch (CertificateExpiredException e) {
+                throw new FatalAlertException(AlertDescription.CERTIFICATE_EXPIRED);
+            } catch (CertificateException | SignatureException e) {
+                throw new FatalAlertException(AlertDescription.BAD_CERTIFICATE);
+            } catch (NoSuchAlgorithmException | InvalidKeyException | NoSuchProviderException | BadPaddingException | IllegalBlockSizeException | NoSuchPaddingException e) {
+                throw new FatalAlertException(AlertDescription.INTERNAL_ERROR);
+            }
+
         } catch (FatalAlertException e) {
             e.printStackTrace();
         }
 
-//            // authenticate server certificate
-//            System.out.print("Authenticating server certificate... ");
-//            X509Certificate serverCert = (X509Certificate) CertificateFactory.getInstance("X.509").generateCertificate(new ByteArrayInputStream(certificate.getCertificateList()));
-//            try {
-//                serverCert.checkValidity();
-//                serverCert.verify(caCert.getPublicKey());
-//                System.out.println("Authenticated.");
-//            } catch (CertificateExpiredException | CertificateNotYetValidException e) {
-//                System.out.println("Failed! Reason: " + e.getMessage());
-////                cw.write(AlertMessage.fatal(AlertMessage.AlertDescription.CERTIFICATE_EXPIRED));
-////                sc.close();
-////                return;
-//            } catch (NoSuchAlgorithmException | NoSuchProviderException | SignatureException | InvalidKeyException e) {
-//                System.out.println("Failed! Reason: " + e.getMessage());
-////                cw.write(AlertMessage.fatal(AlertMessage.AlertDescription.BAD_CERTIFICATE));
-////                sc.close();
-////                return;
-//            }
-//
-//            // generate and send pre-master key
+
 //            PremasterSecret premasterSecret;
 //            try {
 //                System.out.print("Generating pre-master key... ");
-//
 //                // todo: for CP-1, generate a new RSA keypair and send the public key encrypted by the server key
 //
-//                if (selectedCipherSuite.keyExchangeAlgorithm.equals("RSA")) {
-//                    premasterSecret = PremasterSecret.newRSAPremasterSecret(CLIENT_VERSION);
-//                    System.out.println("Done.");
-//                    System.out.println("Unencypted premaster secret: " + Arrays.toString(premasterSecret.toBytes()));
-//                    System.out.println("Premaster secret length: " + premasterSecret.toBytes().length);
-//                } else {
-//                    System.out.println("Failed! Reason: Unsupported key exchange algorithm");
-//                    cw.write(AlertMessage.fatal(AlertMessage.AlertDescription.HANDSHAKE_FAILURE));
-//                    sc.close();
-//                    return;
-//                }
 //
 //                // send ClientKeyExchange
 //                System.out.print("Sending ClientKeyExchange... ");

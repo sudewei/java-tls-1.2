@@ -23,58 +23,62 @@ class DefaultRecordLayerImpl implements RecordLayer {
         inputQueue = new ByteQueue();
     }
 
-    public GenericProtocolMessage getNextIncomingMessage() throws IOException, FatalAlertException {
+    public GenericProtocolMessage getNextIncomingMessage() throws FatalAlertException {
         // invariant: contents of next record or leftoverbytes are a new handshake layer message from the beginning
         ContentType nextMsgType;
 
-        // if inputqueue is empty, fill it with content from the next incoming record
-        if (inputQueue.isEmpty()) {
-            Record nextIncRecord = getNextIncomingRecord();
-            nextMsgType = nextIncRecord.getContentType();
-            inputQueue.enqueue(nextIncRecord.getContent());
-        } else {
-            nextMsgType = leftoversType;
-        }
+        try {
+            // if inputqueue is empty, fill it with content from the next incoming record
+            if (inputQueue.isEmpty()) {
+                Record nextIncRecord = getNextIncomingRecord();
+                nextMsgType = nextIncRecord.getContentType();
+                inputQueue.enqueue(nextIncRecord.getContent());
+            } else {
+                nextMsgType = leftoversType;
+            }
 
-        switch (nextMsgType) {
-            case CHANGE_CIPHER_SPEC:
-                // change cipher specs are only sent one at a time
-                // so there should only be one inside a single record
-                // and a record cannot be empty
+            switch (nextMsgType) {
+                case CHANGE_CIPHER_SPEC:
+                    // change cipher specs are only sent one at a time
+                    // so there should only be one inside a single record
+                    // and a record cannot be empty
 
-                if (inputQueue.size() != ChangeCipherSpecMessage.BYTES)
+                    if (inputQueue.size() != ChangeCipherSpecMessage.BYTES)
+                        throw new FatalAlertException(AlertDescription.DECODE_ERROR);
+
+                    return new GenericProtocolMessage(CHANGE_CIPHER_SPEC, inputQueue.dequeue(ChangeCipherSpecMessage.BYTES));
+                case ALERT:
+                    // if there are not enough content for an alert,
+                    // we get more content from the next incoming record
+                    while (inputQueue.size() < AlertMessage.BYTES) updateInputQueue(ALERT);
+
+                    byte[] incAlertContent = inputQueue.dequeue(AlertMessage.BYTES);
+                    if (!inputQueue.isEmpty()) leftoversType = ALERT;
+                    return new GenericProtocolMessage(ALERT, incAlertContent);
+                case HANDSHAKE:
+                    // we need to read the header of the incoming message to find out how long it is
+                    // but if the entire header has not been received yet,
+                    // we get more content from the next incoming record
+                    while (inputQueue.size() < HandshakeMessage.HEADER_LENGTH) updateInputQueue(HANDSHAKE);
+
+                    byte[] length = inputQueue.peek(3, 1);  // handshake length field is 3 content long
+                    int incHandshakeLength = UInt.btoi(length);
+
+                    // if the entire of the incoming handshake is not in the input queue yet,
+                    // we get more content from the next incoming record
+                    while (inputQueue.size() < HandshakeMessage.HEADER_LENGTH + incHandshakeLength) updateInputQueue(nextMsgType);
+
+                    byte[] incHandshakeContent = inputQueue.dequeue(HandshakeMessage.HEADER_LENGTH + incHandshakeLength);
+                    if (!inputQueue.isEmpty()) leftoversType = HANDSHAKE;
+                    return new GenericProtocolMessage(HANDSHAKE, incHandshakeContent);
+                case APPLICATION_DATA:
+                    // TODO: 13/04/2016
+                    return new GenericProtocolMessage(APPLICATION_DATA, new byte[0]);
+                default:
                     throw new FatalAlertException(AlertDescription.DECODE_ERROR);
-
-                return new GenericProtocolMessage(CHANGE_CIPHER_SPEC, inputQueue.dequeue(ChangeCipherSpecMessage.BYTES));
-            case ALERT:
-                // if there are not enough content for an alert,
-                // we get more content from the next incoming record
-                while (inputQueue.size() < AlertMessage.BYTES) updateInputQueue(ALERT);
-
-                byte[] incAlertContent = inputQueue.dequeue(AlertMessage.BYTES);
-                if (!inputQueue.isEmpty()) leftoversType = ALERT;
-                return new GenericProtocolMessage(ALERT, incAlertContent);
-            case HANDSHAKE:
-                // we need to read the header of the incoming message to find out how long it is
-                // but if the entire header has not been received yet,
-                // we get more content from the next incoming record
-                while (inputQueue.size() < HandshakeMessage.HEADER_LENGTH) updateInputQueue(HANDSHAKE);
-
-                byte[] length = inputQueue.peek(3, 1);  // handshake length field is 3 content long
-                int incHandshakeLength = UInt.btoi(length);
-
-                // if the entire of the incoming handshake is not in the input queue yet,
-                // we get more content from the next incoming record
-                while (inputQueue.size() < HandshakeMessage.HEADER_LENGTH + incHandshakeLength) updateInputQueue(nextMsgType);
-
-                byte[] incHandshakeContent = inputQueue.dequeue(HandshakeMessage.HEADER_LENGTH + incHandshakeLength);
-                if (!inputQueue.isEmpty()) leftoversType = HANDSHAKE;
-                return new GenericProtocolMessage(HANDSHAKE, incHandshakeContent);
-            case APPLICATION_DATA:
-                // TODO: 13/04/2016
-                return new GenericProtocolMessage(APPLICATION_DATA, new byte[0]);
-            default:
-                throw new FatalAlertException(AlertDescription.DECODE_ERROR);
+            }
+        } catch (IOException e) {
+            throw new FatalAlertException(AlertDescription.DECODE_ERROR);
         }
     }
 

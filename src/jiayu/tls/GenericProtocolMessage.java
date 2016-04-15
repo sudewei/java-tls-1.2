@@ -50,7 +50,7 @@ public class GenericProtocolMessage implements ProtocolMessage {
                 return ServerHelloDone.interpret(handshake);
             case CLIENT_KEY_EXCHANGE:
                 // TODO: 15/04/2016
-                return null;
+                return ClientKeyExchange.interpret(handshake);
             case FINISHED:
                 // TODO: 15/04/2016
                 return null;

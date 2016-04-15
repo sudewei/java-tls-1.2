@@ -2,6 +2,9 @@ package jiayu;
 
 import jiayu.tls.*;
 
+import javax.crypto.BadPaddingException;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -9,6 +12,7 @@ import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.NotDirectoryException;
 import java.nio.file.Path;
+import java.security.InvalidKeyException;
 import java.security.KeyFactory;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
@@ -157,22 +161,25 @@ public class SecStore {
             recordLayer.putNextOutgoingMessage(serverHelloDone);
             System.out.println("Done.");
 
+            // receive ClientKeyExchange
+            System.out.print("Receiving ClientKeyExchange... ");
+            ClientKeyExchange clientKeyExchange = (ClientKeyExchange) recordLayer.getNextIncomingMessage().asHandshakeMessage(HandshakeType.CLIENT_KEY_EXCHANGE);
+            System.out.println("Done.");
+
+        // read premaster secret
+        PremasterSecret premasterSecret = new PremasterSecret(clientKeyExchange.getEncryptedPremasterSecret());
+            try {
+                premasterSecret.decrypt(serverkey, clientHello.getClientVersion());
+            } catch (BadPaddingException | InvalidKeyException | IllegalBlockSizeException e) {
+               throw new FatalAlertException(AlertDescription.DECRYPT_ERROR);
+            } catch (NoSuchPaddingException | NoSuchAlgorithmException e) {
+                throw new FatalAlertException(AlertDescription.INTERNAL_ERROR);
+            }
+            System.out.println("Decrypted premaster secret: " + Arrays.toString(premasterSecret.toBytes()));
         } catch (FatalAlertException e) {
             e.printStackTrace();
         }
-//        // receive ClientKeyExchange
-//        System.out.print("Receiving ClientKeyExchange... ");
-//        ClientKeyExchange clientKeyExchange = ClientKeyExchange.tryToReadFrom(sc);
-//        System.out.println("Done.");
 //
-//        // read premaster secret
-//        PremasterSecret premasterSecret = new PremasterSecret(clientKeyExchange.getEncryptedPremasterSecret());
-//        try {
-//            premasterSecret.decrypt(serverkey, clientHello.getClientVersion());
-//            System.out.println("Decrypted premaster secret: " + Arrays.toString(premasterSecret.toBytes()));
-//        } catch (BadPaddingException | IllegalBlockSizeException | NoSuchPaddingException | InvalidKeyException | NoSuchAlgorithmException e) {
-//            e.printStackTrace();
-//        }
 //
 //        // receive client ChangeCipherSpecMessage
 //        ChangeCipherSpecMessage.tryToReadFrom(sc);

@@ -61,7 +61,7 @@ public class PremasterSecret {
     }
 
 
-    byte[] toBytes() {
+    public byte[] toBytes() {
         return bytes;
     }
 }
