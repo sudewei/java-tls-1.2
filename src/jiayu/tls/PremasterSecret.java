@@ -29,7 +29,7 @@ public class PremasterSecret {
     public byte[] getEncryptedBytes(PublicKey serverKey) throws BadPaddingException, IllegalBlockSizeException, InvalidKeyException, NoSuchPaddingException, NoSuchAlgorithmException {
         Cipher cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
         cipher.init(Cipher.ENCRYPT_MODE, serverKey);
-        return cipher.doFinal(this.bytes);
+        return ByteBuffer.allocate(130).putShort((short) 128).put(cipher.doFinal(this.bytes)).array();
     }
 
     public void decrypt(Key serverKey, short clientVersion) throws BadPaddingException, IllegalBlockSizeException, InvalidKeyException, NoSuchPaddingException, NoSuchAlgorithmException {
