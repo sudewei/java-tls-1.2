@@ -10,7 +10,7 @@ public class ClientTest {
     public void connectSecured() throws Exception {
         Client client = new Client();
         client.setCACertificate(Paths.get("misc/certs/servercert.crt"));
-        client.connectSecured("localhost", 4443);
-//        client.connectSecured("192.168.148.129", 443);
+//        client.connectSecured("localhost", 4443);
+        client.connectSecured("192.168.148.129", 443);
     }
 }
