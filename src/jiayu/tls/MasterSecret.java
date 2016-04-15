@@ -1,13 +1,10 @@
 package jiayu.tls;
 
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
-import java.nio.ByteBuffer;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 
 public class MasterSecret {
-    byte[] bytes;
+    private final byte[] bytes;
 
     private MasterSecret(byte[] bytes) {
         this.bytes = bytes;
@@ -18,14 +15,10 @@ public class MasterSecret {
     }
 
     public static MasterSecret generateMasterSecret(PremasterSecret premasterSecret, ClientHello clientHello, ServerHello serverHello) throws InvalidKeyException, NoSuchAlgorithmException {
-        Mac hmac = Mac.getInstance("HmacSHA256");
-        hmac.init(new SecretKeySpec(premasterSecret.getBytes(), "HmacSHA256"));
-        hmac.update("master secret".getBytes());
-        hmac.update(clientHello.getRandom().toBytes());
-        hmac.update(serverHello.getRandom().toBytes());
-        byte[] A1 = hmac.doFinal();
-        byte[] A2 = hmac.doFinal(A1);
-        byte[] bytes = ByteBuffer.allocate(48).put(A1).put(A2, 0, 16).array();
+        PRF prf = PRF.getInstance(PRFAlgorithm.TLS_PRF_SHA256);
+        prf.init(premasterSecret.getBytes(), "master secret", clientHello.getRandom().toBytes(), serverHello.getRandom().toBytes());
+        byte[] bytes = prf.getBytes(48);
+
         return new MasterSecret(bytes);
     }
 }

@@ -57,7 +57,7 @@ public class ServerHello extends HandshakeMessage {
         return serverVersion;
     }
 
-    Random getRandom() {
+    public Random getRandom() {
         return random;
     }
 

@@ -2,9 +2,9 @@ package jiayu.tls;
 
 import java.nio.ByteBuffer;
 
-public abstract class HandshakeMessage implements ProtocolMessage {
+abstract class HandshakeMessage implements ProtocolMessage {
     public static final ContentType CONTENT_TYPE = ContentType.HANDSHAKE;
-    public static final int HEADER_LENGTH = 4;
+    static final int HEADER_LENGTH = 4;
 
     private final HandshakeType handshakeType;
 

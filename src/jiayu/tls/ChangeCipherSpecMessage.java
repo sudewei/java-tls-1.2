@@ -1,7 +1,5 @@
 package jiayu.tls;
 
-import java.io.IOException;
-import java.nio.channels.ReadableByteChannel;
 import java.util.Arrays;
 
 public class ChangeCipherSpecMessage implements ProtocolMessage {
@@ -13,7 +11,7 @@ public class ChangeCipherSpecMessage implements ProtocolMessage {
         return CHANGE_CIPHER_SPEC;
     }
 
-    private ChangeCipherSpecMessage() {
+    public ChangeCipherSpecMessage() {
     }
 
     ChangeCipherSpecMessage(byte[] content) throws FatalAlertException {

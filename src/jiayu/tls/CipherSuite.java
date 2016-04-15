@@ -3,31 +3,39 @@ package jiayu.tls;
 import java.util.Arrays;
 import java.util.List;
 
+import static jiayu.tls.BulkCipherAlgorithm.AES_128_CBC;
+import static jiayu.tls.BulkCipherAlgorithm.AES_128_ECB;
+import static jiayu.tls.KeyExchangeAlgorithm.RSA;
+import static jiayu.tls.MACAlgorithm.HMAC_SHA256;
+import static jiayu.tls.PRFAlgorithm.TLS_PRF_SHA256;
+
+
+
 public enum CipherSuite {
-    TLS_NULL_WITH_NULL_NULL(0x0000, "", "", "", 0, 0),
-    TLS_RSA_WITH_AES_128_ECB_SHA256(0xFFFE, "RSA", "AES_128_ECB", "SHA256", 128, 256),
-    TLS_RSA_WITH_RSA_1024_ECB_SHA256(0xFFFF, "RSA", "RSA_1024_ECB", "SHA256", 1024, 256);
+    TLS_NULL_WITH_NULL_NULL(0x0000, null, null, null, null),
+    TLS_RSA_WITH_AES_128_CBC_SHA256(0x002F, TLS_PRF_SHA256, RSA, AES_128_CBC, HMAC_SHA256),
+    TLS_RSA_WITH_AES_128_ECB_SHA256(0xFFFE, TLS_PRF_SHA256, RSA, AES_128_ECB, HMAC_SHA256),
+    TLS_RSA_WITH_RSA_1024_ECB_SHA256(0xFFFF, TLS_PRF_SHA256, RSA, BulkCipherAlgorithm.RSA_1024, HMAC_SHA256);
 
     public static final int BYTES = 2;
 
     public final short value;
-    public final String keyExchangeAlgorithm;
-    public final String bulkCipherAlgorithm;
-    public final String macAlgorithm;
-    public final int encKeyLength;
-    public final int macKeyLength;
+    public final PRFAlgorithm prfAlgorithm;
+    public final KeyExchangeAlgorithm keyExchangeAlgorithm;
+    public final BulkCipherAlgorithm bulkCipherAlgorithm;
+    public final MACAlgorithm macAlgorithm;
 
-    CipherSuite(int value, String keyExchangeAlgorithm, String bulkCipherAlgorithm, String macAlgorithm,
-                int encKeyLength, int macKeyLength) {
-        assert value <= 0xFFFF;
+    CipherSuite(int value,
+                PRFAlgorithm prfAlgorithm,
+                KeyExchangeAlgorithm keyExchangeAlgorithm,
+                BulkCipherAlgorithm bulkCipherAlgorithm,
+                MACAlgorithm macAlgorithm) {
         this.value = (short) value;
 
+        this.prfAlgorithm = prfAlgorithm;
         this.keyExchangeAlgorithm = keyExchangeAlgorithm;
         this.bulkCipherAlgorithm = bulkCipherAlgorithm;
         this.macAlgorithm = macAlgorithm;
-
-        this.encKeyLength = encKeyLength;
-        this.macKeyLength = macKeyLength;
     }
 
     public static CipherSuite fromValue(short value) {

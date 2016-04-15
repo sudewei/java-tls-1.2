@@ -4,7 +4,7 @@ import java.util.HashMap;
 
 public enum AlertDescription {
     CLOSE_NOTIFY(0), UNEXPECTED_MESSAGE(10), HANDSHAKE_FAILURE(40), BAD_CERTIFICATE(42),
-    CERTIFICATE_EXPIRED(45), DECODE_ERROR(50), DECRYPT_ERROR(51), INTERNAL_ERROR(80);
+    CERTIFICATE_EXPIRED(45), DECODE_ERROR(50), DECRYPT_ERROR(51), INTERNAL_ERROR(80), BAD_RECORD_MAC(20);
 
     private static HashMap<Byte, AlertDescription> map = new HashMap<>();
 

@@ -5,21 +5,13 @@ import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
 import java.nio.ByteBuffer;
-import java.security.InvalidKeyException;
-import java.security.Key;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
-import java.security.cert.X509Certificate;
+import java.security.*;
 
 public class PremasterSecret {
     private byte[] bytes;
 
     public PremasterSecret(byte[] bytes) {
         this.bytes = bytes;
-    }
-
-    public byte[] getBytes() {
-        return bytes;
     }
 
     public static PremasterSecret newRSAPremasterSecret(short clientVersion) {
@@ -34,9 +26,9 @@ public class PremasterSecret {
         return new PremasterSecret(bytes);
     }
 
-    public byte[] getEncryptedBytes(X509Certificate serverCert) throws BadPaddingException, IllegalBlockSizeException, InvalidKeyException, NoSuchPaddingException, NoSuchAlgorithmException {
+    public byte[] getEncryptedBytes(PublicKey serverKey) throws BadPaddingException, IllegalBlockSizeException, InvalidKeyException, NoSuchPaddingException, NoSuchAlgorithmException {
         Cipher cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
-        cipher.init(Cipher.ENCRYPT_MODE, serverCert);
+        cipher.init(Cipher.ENCRYPT_MODE, serverKey);
         return cipher.doFinal(this.bytes);
     }
 
@@ -61,7 +53,7 @@ public class PremasterSecret {
     }
 
 
-    public byte[] toBytes() {
+    public byte[] getBytes() {
         return bytes;
     }
 }

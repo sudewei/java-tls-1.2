@@ -1,20 +1,19 @@
 package jiayu;
 
 import jiayu.tls.*;
+import jiayu.tls.Certificate;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
+import javax.xml.bind.DatatypeConverter;
 import java.io.ByteArrayInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
-import java.security.NoSuchProviderException;
-import java.security.SignatureException;
+import java.security.*;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateExpiredException;
 import java.security.cert.CertificateFactory;
@@ -26,7 +25,7 @@ public class Client {
 
     // magic number for acknowledging successful upload
     private static final long UPLOAD_SUCCESS = 6584997751L;
-    private static final CipherSuite[] SUPPORTED_CIPHER_SUITES = new CipherSuite[]{CipherSuite.TLS_RSA_WITH_AES_128_ECB_SHA256, CipherSuite.TLS_RSA_WITH_RSA_1024_ECB_SHA256};
+    private static final CipherSuite[] SUPPORTED_CIPHER_SUITES = new CipherSuite[]{CipherSuite.TLS_RSA_WITH_AES_128_CBC_SHA256, CipherSuite.TLS_RSA_WITH_RSA_1024_ECB_SHA256};
 
     private X509Certificate caCert;
 
@@ -44,6 +43,7 @@ public class Client {
         Socket socket = new Socket(serverAddress, port);
 
         RecordLayer recordLayer = RecordLayer.getInstance(socket);
+        SecurityParameters sp = new SecurityParameters(ConnectionEnd.CLIENT);
 
 //        ByteBuffer sndBuf = ByteBuffer.allocate(sc.socket().getSendBufferSize());
 //        ByteBuffer rcvBuf = ByteBuffer.allocate(sc.socket().getReceiveBufferSize());
@@ -56,6 +56,8 @@ public class Client {
         recordLayer.putNextOutgoingMessage(clientHello);
         System.out.println("Done.");
 
+        sp.setClientRandom(clientHello.getRandom().toBytes());
+
         // receive server hello
         System.out.print("Waiting for ServerHello... ");
         System.out.flush();
@@ -64,6 +66,8 @@ public class Client {
                     .asHandshakeMessage(HandshakeType.SERVER_HELLO);
             System.out.println("Received.");
 
+            sp.setCipherSuite(serverHello.getCipherSuite());
+            sp.setServerRandom(serverHello.getRandom().toBytes());
 
             // receive server certificate
             System.out.print("Waiting for Certificate... ");
@@ -89,6 +93,7 @@ public class Client {
 
                 the server cert is always the first certificate in the list
              */
+            PublicKey serverPublicKey;
             System.out.println("Authenticating server certificates... ");
             CertificateList certChain = certificate.getCertificateList();
             X509Certificate serverCert = null;
@@ -110,66 +115,85 @@ public class Client {
                 }
                 assert prev != null;
                 prev.verify(caCert.getPublicKey());
-
+                serverPublicKey = serverCert.getPublicKey();
                 System.out.println("Authenticated.");
 
-                // generate and send pre-master key
-                CipherSuite selectedCipherSuite = serverHello.getCipherSuite();
-                PremasterSecret premasterSecret;
-                ClientKeyExchange clientKeyExchange;
-                if (selectedCipherSuite.keyExchangeAlgorithm.equals("RSA")) {
-                    premasterSecret = PremasterSecret.newRSAPremasterSecret(CLIENT_VERSION);
-                    clientKeyExchange = new ClientKeyExchange(premasterSecret.getEncryptedBytes(serverCert));
-                    recordLayer.putNextOutgoingMessage(clientKeyExchange);
-                    System.out.println("Done.");
-                    System.out.println("Unencypted premaster secret: " + Arrays.toString(premasterSecret.toBytes()));
-                    System.out.println("Premaster secret length: " + premasterSecret.toBytes().length);
-                } else {
-                    throw new FatalAlertException(AlertDescription.INTERNAL_ERROR);
-                }
             } catch (CertificateExpiredException e) {
                 throw new FatalAlertException(AlertDescription.CERTIFICATE_EXPIRED);
             } catch (CertificateException | SignatureException e) {
                 throw new FatalAlertException(AlertDescription.BAD_CERTIFICATE);
-            } catch (NoSuchAlgorithmException | InvalidKeyException | NoSuchProviderException | BadPaddingException | IllegalBlockSizeException | NoSuchPaddingException e) {
+            } catch (NoSuchAlgorithmException | InvalidKeyException | NoSuchProviderException e) {
                 throw new FatalAlertException(AlertDescription.INTERNAL_ERROR);
             }
+
+            // generate and send pre-master key
+            CipherSuite selectedCipherSuite = serverHello.getCipherSuite();
+            PremasterSecret premasterSecret;
+            ClientKeyExchange clientKeyExchange;
+            if (selectedCipherSuite.keyExchangeAlgorithm == KeyExchangeAlgorithm.RSA) {
+                premasterSecret = PremasterSecret.newRSAPremasterSecret(CLIENT_VERSION);
+                try {
+                    clientKeyExchange = new ClientKeyExchange(premasterSecret.getEncryptedBytes(serverPublicKey));
+                } catch (BadPaddingException | IllegalBlockSizeException | InvalidKeyException | NoSuchAlgorithmException | NoSuchPaddingException e) {
+                    throw new FatalAlertException(AlertDescription.INTERNAL_ERROR);
+                }
+                recordLayer.putNextOutgoingMessage(clientKeyExchange);
+                System.out.println("Done.");
+                System.out.println("Unencypted premaster secret: " + Arrays.toString(premasterSecret.getBytes()));
+                System.out.println("Premaster secret length: " + premasterSecret.getBytes().length);
+            } else {
+                throw new FatalAlertException(AlertDescription.INTERNAL_ERROR);
+            }
+
+            // send client ChangeCipherSpec message
+            ChangeCipherSpecMessage changeCipherSpec = new ChangeCipherSpecMessage();
+            recordLayer.putNextOutgoingMessage(changeCipherSpec);
+
+            // generate master secret
+            MasterSecret masterSecret;
+            try {
+                masterSecret = MasterSecret.generateMasterSecret(premasterSecret, clientHello, serverHello);
+                System.out.println("Master secret: " + Arrays.toString(masterSecret.getBytes()));
+                System.out.println("Master secret length: " + masterSecret.getBytes().length);
+            } catch (InvalidKeyException | NoSuchAlgorithmException e) {
+                throw new FatalAlertException(AlertDescription.INTERNAL_ERROR);
+            }
+
+            sp.setMasterSecret(masterSecret.getBytes());
+            ConnectionState state;
+            try {
+                state = new ConnectionState(sp);
+            } catch (NoSuchAlgorithmException | InvalidKeyException e) {
+                e.printStackTrace();
+                throw new FatalAlertException(AlertDescription.INTERNAL_ERROR);
+            }
+
+            // create client Finished message
+            Finished clientFinished = Finished.createClientFinishedMessage(masterSecret, clientHello, serverHello, certificate, serverHelloDone, clientKeyExchange);
+            System.out.println("client finished generated by client: " + DatatypeConverter.printHexBinary(clientFinished.getContent()));
+
+            // encrypt client Finished message
+            try {
+                GenericBlockCipher encryptedClientFinished = GenericBlockCipher.encrypt(state, clientFinished.getContent());
+                EncryptedFinished encryptedFinished = new EncryptedFinished(encryptedClientFinished);
+
+                System.out.println(DatatypeConverter.printHexBinary(encryptedFinished.getContent()));
+
+                recordLayer.putNextOutgoingMessage(encryptedFinished);
+            } catch (InvalidKeyException | NoSuchPaddingException | NoSuchAlgorithmException | IllegalBlockSizeException | InvalidAlgorithmParameterException | BadPaddingException e) {
+                e.printStackTrace();
+                throw new FatalAlertException(AlertDescription.INTERNAL_ERROR);
+            }
+
+
+//            recordLayer.putNextOutgoingMessage(clientFinished);
 
         } catch (FatalAlertException e) {
             e.printStackTrace();
         }
 
 
-//            PremasterSecret premasterSecret;
-//            try {
-//                System.out.print("Generating pre-master key... ");
-//                // todo: for CP-1, generate a new RSA keypair and send the public key encrypted by the server key
 //
-//
-//                // send ClientKeyExchange
-//                System.out.print("Sending ClientKeyExchange... ");
-//                ClientKeyExchange clientKeyExchange = new ClientKeyExchange(premasterSecret.getEncryptedBytes(serverCert));
-//                cw.write(clientKeyExchange);
-//                System.out.println("Done.");
-//            } catch (NoSuchAlgorithmException | InvalidKeyException | BadPaddingException | NoSuchPaddingException | IllegalBlockSizeException e) {
-//                System.out.println("Failed! Reason: " + e.getMessage());
-//                cw.write(AlertMessage.fatal(AlertMessage.AlertDescription.INTERNAL_ERROR));
-//                sc.close();
-//                return;
-//            }
-//
-//            // send client ChangeCipherSpecMessage
-//            cw.write(new ChangeCipherSpecMessage().toReadableByteChannel());
-//
-//            // generate master secret
-//            MasterSecret masterSecret;
-//            try {
-//                masterSecret = MasterSecret.generateMasterSecret(premasterSecret, clientHello, serverHello);
-//                System.out.println("Master secret: " + Arrays.toString(masterSecret.toBytes()));
-//                System.out.println("Master secret length: " + masterSecret.toBytes().length);
-//            } catch (InvalidKeyException | NoSuchAlgorithmException e) {
-//                e.printStackTrace();
-//            }
 //
 //            // TODO: 11/04/2016 send client Finished
 //

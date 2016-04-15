@@ -13,4 +13,6 @@ public interface RecordLayer {
     GenericProtocolMessage getNextIncomingMessage() throws IOException, FatalAlertException;
 
     void putNextOutgoingMessage(ProtocolMessage protocolMessage) throws IOException;
+
+    void setEncryptionOn(boolean encryptionOn);
 }

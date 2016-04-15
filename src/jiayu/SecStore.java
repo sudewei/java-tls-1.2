@@ -1,10 +1,12 @@
 package jiayu;
 
 import jiayu.tls.*;
+import jiayu.tls.Certificate;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
+import javax.xml.bind.DatatypeConverter;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -12,10 +14,7 @@ import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.NotDirectoryException;
 import java.nio.file.Path;
-import java.security.InvalidKeyException;
-import java.security.KeyFactory;
-import java.security.NoSuchAlgorithmException;
-import java.security.PrivateKey;
+import java.security.*;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.Arrays;
@@ -121,6 +120,7 @@ public class SecStore {
         if (serverCert == null) throw new IllegalStateException();
 
         RecordLayer recordLayer = RecordLayer.getInstance(socket);
+        SecurityParameters sp = new SecurityParameters(ConnectionEnd.SERVER);
 
         // receive client hello
         System.out.print("Waiting for ClientHello... ");
@@ -132,6 +132,8 @@ public class SecStore {
             System.out.println("Received.");
             System.out.println(clientHello);
 
+            sp.setClientRandom(clientHello.getRandom().toBytes());
+
             // choose cipher suite
             System.out.print("Choosing cipher suite... ");
             System.out.flush();
@@ -140,12 +142,16 @@ public class SecStore {
                     : clientHello.getCipherSuites()[0];
             System.out.println("Selected cipher suite: " + selectedCipherSuite.name());
 
+            sp.setCipherSuite(selectedCipherSuite);
+
             // send server hello
             System.out.print("Sending ServerHello... ");
             System.out.flush();
             ServerHello serverHello = new ServerHello(selectedCipherSuite);
             recordLayer.putNextOutgoingMessage(serverHello);
             System.out.println("Done.");
+
+            sp.setServerRandom(serverHello.getRandom().toBytes());
 
             // send server serverCert
             System.out.print("Sending Certificate... ");
@@ -166,16 +172,65 @@ public class SecStore {
             ClientKeyExchange clientKeyExchange = (ClientKeyExchange) recordLayer.getNextIncomingMessage().asHandshakeMessage(HandshakeType.CLIENT_KEY_EXCHANGE);
             System.out.println("Done.");
 
-        // read premaster secret
-        PremasterSecret premasterSecret = new PremasterSecret(clientKeyExchange.getEncryptedPremasterSecret());
+            // read premaster secret
+            PremasterSecret premasterSecret = new PremasterSecret(clientKeyExchange.getEncryptedPremasterSecret());
             try {
                 premasterSecret.decrypt(serverkey, clientHello.getClientVersion());
             } catch (BadPaddingException | InvalidKeyException | IllegalBlockSizeException e) {
-               throw new FatalAlertException(AlertDescription.DECRYPT_ERROR);
+                throw new FatalAlertException(AlertDescription.DECRYPT_ERROR);
             } catch (NoSuchPaddingException | NoSuchAlgorithmException e) {
                 throw new FatalAlertException(AlertDescription.INTERNAL_ERROR);
             }
-            System.out.println("Decrypted premaster secret: " + Arrays.toString(premasterSecret.toBytes()));
+
+            System.out.println("Decrypted premaster secret: " + Arrays.toString(premasterSecret.getBytes()));
+
+            // generate master secret
+            MasterSecret masterSecret;
+            try {
+                masterSecret = MasterSecret.generateMasterSecret(premasterSecret, clientHello, serverHello);
+                System.out.println("Master secret: " + Arrays.toString(masterSecret.getBytes()));
+                System.out.println("Master secret length: " + masterSecret.getBytes().length);
+            } catch (InvalidKeyException | NoSuchAlgorithmException e) {
+                throw new FatalAlertException(AlertDescription.INTERNAL_ERROR);
+            }
+
+            sp.setMasterSecret(masterSecret.getBytes());
+            ConnectionState state;
+            try {
+                state = new ConnectionState(sp);
+            } catch (NoSuchAlgorithmException | InvalidKeyException e) {
+                e.printStackTrace();
+                throw new FatalAlertException(AlertDescription.INTERNAL_ERROR);
+            }
+
+            // receive client ChangeCipherSpec
+            recordLayer.getNextIncomingMessage().asChangeCipherSpecMessage();
+            recordLayer.setEncryptionOn(true);
+
+
+            // receive encrypted client Finished message
+            byte[] encryptedFinishedMessage = recordLayer.getNextIncomingMessage().getContent();
+
+            System.out.println(DatatypeConverter.printHexBinary(encryptedFinishedMessage));
+
+            byte[] iv = Arrays.copyOf(encryptedFinishedMessage, state.getSecurityParameters().getBulkCipherAlgorithm().ivLength);
+            byte[] ciphertext = Arrays.copyOfRange(encryptedFinishedMessage, iv.length, encryptedFinishedMessage.length);
+
+            byte[] decryptedFinishedMessage;
+            try {
+                decryptedFinishedMessage = GenericBlockCipher.decrypt(state, new GenericBlockCipher(iv, ciphertext));
+            } catch (NoSuchPaddingException | NoSuchAlgorithmException | InvalidKeyException | BadPaddingException | IllegalBlockSizeException | InvalidAlgorithmParameterException e) {
+                e.printStackTrace();
+                throw new FatalAlertException(AlertDescription.INTERNAL_ERROR);
+            }
+
+            DatatypeConverter.printHexBinary(decryptedFinishedMessage);
+
+            // verify client Finished message
+            Finished clientFinished = Finished.createClientFinishedMessage(masterSecret, clientHello, serverHello, certificate, serverHelloDone, clientKeyExchange);
+            System.out.println("client finished generated by server: " + DatatypeConverter.printHexBinary(clientFinished.getContent()));
+
+
         } catch (FatalAlertException e) {
             e.printStackTrace();
         }
@@ -188,7 +243,7 @@ public class SecStore {
 //        MasterSecret masterSecret;
 //        try {
 //            masterSecret = MasterSecret.generateMasterSecret(premasterSecret, clientHello, serverHello);
-//            System.out.println("Master secret: " + Arrays.toString(masterSecret.toBytes()));
+//            System.out.println("Master secret: " + Arrays.toString(masterSecret.getBytes()));
 //        } catch (InvalidKeyException | NoSuchAlgorithmException e) {
 //            e.printStackTrace();
 //        }
