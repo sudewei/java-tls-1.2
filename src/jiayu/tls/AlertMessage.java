@@ -28,6 +28,14 @@ public class AlertMessage implements ProtocolMessage {
         return new AlertMessage(AlertLevel.FATAL, AlertDescription.UNEXPECTED_MESSAGE);
     }
 
+    public AlertLevel getLevel() {
+        return level;
+    }
+
+    public AlertDescription getDescription() {
+        return description;
+    }
+
     @Override
     public ContentType getContentType() {
         return ContentType.ALERT;

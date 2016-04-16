@@ -40,7 +40,7 @@ public class Client {
                 .generateCertificate(Files.newInputStream(caCert));
     }
 
-    public void connectSecured(String serverAddress, int port) throws IOException {
+    public RecordLayer connectSecured(String serverAddress, int port) throws IOException {
         Socket socket = new Socket(serverAddress, port);
 
         SecurityParameters currSecParams = new SecurityParameters(ConnectionEnd.CLIENT);
@@ -228,26 +228,18 @@ public class Client {
                 throw new FatalAlertException(AlertDescription.DECRYPT_ERROR);
             System.out.println("Verified server Finished.");
 
+            System.out.println("Handshake completed.");
 
+            // send application data
+            ApplicationData data = new ApplicationData("hello, world".getBytes());
+            recordLayer.putNextOutgoingMessage(data);
 
+            return recordLayer;
         } catch (FatalAlertException e) {
+            recordLayer.putNextOutgoingMessage(AlertMessage.fatal(e.getAlertDescription()));
             e.printStackTrace();
+            throw new RuntimeException();
         }
-
-
-//
-//
-//            // TODO: 11/04/2016 send client Finished
-//
-//
-//            // TODO: 11/04/2016 receive server ChangeCipherSpecMessage
-//
-//            // TODO: 11/04/2016 receive server Finished
-//
-//        } catch (UnexpectedMessageException e) {
-//            cw.write(AlertMessage.fatal(AlertMessage.AlertDescription.UNEXPECTED_MESSAGE));
-//            sc.close();
-//        }
     }
 
 //    public boolean uploadFile(Path file) throws IOException {

@@ -21,4 +21,6 @@ public interface RecordLayer {
     ConnectionState getReadState();
 
     void updateReadState(ConnectionState newState);
+
+    void close() throws IOException;
 }

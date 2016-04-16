@@ -20,6 +20,7 @@ import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.Arrays;
 
+@SuppressWarnings("Duplicates")
 public class SecStore {
     // magic number for acknowledging successful upload
     private static final long UPLOAD_SUCCESS = 6584997751L;
@@ -271,29 +272,16 @@ public class SecStore {
                     clientHello, serverHello, certificate, serverHelloDone, clientKeyExchange, clientFinished);
             recordLayer.putNextOutgoingMessage(serverFinished);
             System.out.println("Sent server Finished.");
+
+            System.out.println("Handshake completed.");
+
+            // receive application data
+            ApplicationData data = recordLayer.getNextIncomingMessage().asApplicationData();
+
+            System.out.println("Received application data: " + new String(data.getContent()));
         } catch (FatalAlertException e) {
             e.printStackTrace();
         }
-//
-//
-//        // receive client ChangeCipherSpecMessage
-//        ChangeCipherSpecMessage.tryToReadFrom(sc);
-//
-//        // generate master secret
-//        MasterSecret masterSecret;
-//        try {
-//            masterSecret = MasterSecret.generateMasterSecret(premasterSecret, clientHello, serverHello);
-//            System.out.println("Master secret: " + Arrays.toString(masterSecret.getBytes()));
-//        } catch (InvalidKeyException | NoSuchAlgorithmException e) {
-//            e.printStackTrace();
-//        }
-//
-//        // TODO: 11/04/2016 receive client Finished
-//
-//        // TODO: 11/04/2016 send server ChangeCipherSpecMessage
-//
-//        // TODO: 11/04/2016 send server Finished
-
     }
 
     @FunctionalInterface

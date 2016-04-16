@@ -39,7 +39,7 @@ class DefaultRecordLayerImpl implements RecordLayer {
 
     @Override
     public GenericProtocolMessage getNextIncomingMessage() throws FatalAlertException {
-        // invariant: contents of next record or leftoverbytes are a new handshake layer message from the beginning
+        // invariant: contents of next record or leftoverbytes are a new message from the beginning
         ContentType nextMsgType;
 
         try {
@@ -68,6 +68,8 @@ class DefaultRecordLayerImpl implements RecordLayer {
                     while (inputQueue.size() < AlertMessage.BYTES) updateInputQueue(ALERT);
 
                     byte[] incAlertContent = inputQueue.dequeue(AlertMessage.BYTES);
+                    if (new AlertMessage(incAlertContent).getLevel() == AlertLevel.FATAL)
+                        throw new RuntimeException("Received fatal alert, connection terminated");
                     if (!inputQueue.isEmpty()) leftoversType = ALERT;
                     return new GenericProtocolMessage(ALERT, incAlertContent);
                 case HANDSHAKE:
@@ -88,11 +90,11 @@ class DefaultRecordLayerImpl implements RecordLayer {
                     if (!inputQueue.isEmpty()) leftoversType = HANDSHAKE;
                     return new GenericProtocolMessage(HANDSHAKE, incHandshakeContent);
                 case APPLICATION_DATA:
-                    // TODO: 13/04/2016
-                    return new GenericProtocolMessage(APPLICATION_DATA, new byte[0]);
+                    return new GenericProtocolMessage(APPLICATION_DATA, inputQueue.dequeue(inputQueue.size()));
                 default:
                     throw new FatalAlertException(AlertDescription.DECODE_ERROR);
             }
+
         } catch (IOException e) {
             e.printStackTrace();
             throw new FatalAlertException(AlertDescription.DECODE_ERROR);
@@ -175,5 +177,11 @@ class DefaultRecordLayerImpl implements RecordLayer {
     @Override
     public void updateReadState(ConnectionState newState) {
         readState = newState;
+    }
+
+    @Override
+    public void close() throws IOException {
+        putNextOutgoingMessage(AlertMessage.fatal(AlertDescription.USER_CANCELLED));
+        out.close();
     }
 }

@@ -57,4 +57,11 @@ public class GenericProtocolMessage implements ProtocolMessage {
                 throw new FatalAlertException(AlertDescription.INTERNAL_ERROR);
         }
     }
+
+    public ApplicationData asApplicationData() throws FatalAlertException {
+        if (contentType != ContentType.APPLICATION_DATA)
+            throw new FatalAlertException(AlertDescription.UNEXPECTED_MESSAGE);
+
+        return new ApplicationData(content);
+    }
 }

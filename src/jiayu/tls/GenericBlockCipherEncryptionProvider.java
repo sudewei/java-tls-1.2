@@ -67,6 +67,7 @@ class GenericBlockCipherEncryptionProvider {
         byte[] ciphertext = cipher.doFinal(fragment.array());
         System.out.println("Ciphertext: " + DatatypeConverter.printHexBinary(ciphertext));
 
+        writeState.incrementSequenceNumber();
         return new GenericBlockCipher(message.getContentType(), iv, ciphertext);
     }
 
@@ -115,6 +116,7 @@ class GenericBlockCipherEncryptionProvider {
 
         if (!Arrays.equals(mac, macVerify)) throw new FatalAlertException(AlertDescription.BAD_RECORD_MAC);
 
+        readState.incrementSequenceNumber();
         return plaintext;
     }
 
