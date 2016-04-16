@@ -1,7 +1,11 @@
 package jiayu.tls;
 
-class TLSCipherText extends AbstractRecord {
-    TLSCipherText(ContentType contentType, short protocolVersion, byte[] content) {
+class TLSCiphertext extends AbstractRecord {
+    TLSCiphertext(ContentType contentType, short protocolVersion, byte[] content) {
         super(contentType, protocolVersion, content);
+    }
+
+    TLSCiphertext(GenericBlockCipher genericBlockCipher) {
+        super(genericBlockCipher.getContentType(), PROTOCOL_VERSION, genericBlockCipher.getContent());
     }
 }

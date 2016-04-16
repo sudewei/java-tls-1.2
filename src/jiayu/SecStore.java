@@ -119,8 +119,12 @@ public class SecStore {
     public void receiveConnectionSecured(Socket socket) throws IOException {
         if (serverCert == null) throw new IllegalStateException();
 
-        RecordLayer recordLayer = RecordLayer.getInstance(socket);
-        SecurityParameters sp = new SecurityParameters(ConnectionEnd.SERVER);
+        ConnectionState currentConnState = new ConnectionState(ConnectionEnd.SERVER);
+        ConnectionState nextConnState = new ConnectionState(ConnectionEnd.SERVER);
+
+        SecurityParameters sp = nextConnState.getSecurityParameters();
+
+        RecordLayer recordLayer = RecordLayer.getInstance(socket, currentConnState);
 
         // receive client hello
         System.out.print("Waiting for ClientHello... ");
@@ -173,10 +177,11 @@ public class SecStore {
             System.out.println("Done.");
 
             // read premaster secret
-            PremasterSecret premasterSecret = new PremasterSecret(clientKeyExchange.getEncryptedPremasterSecret());
+            PremasterSecret premasterSecret = PremasterSecret.fromBytes(clientKeyExchange.getEncryptedPremasterSecret());
             try {
                 premasterSecret.decrypt(serverkey, clientHello.getClientVersion());
             } catch (BadPaddingException | InvalidKeyException | IllegalBlockSizeException e) {
+                e.printStackTrace();
                 throw new FatalAlertException(AlertDescription.DECRYPT_ERROR);
             } catch (NoSuchPaddingException | NoSuchAlgorithmException e) {
                 throw new FatalAlertException(AlertDescription.INTERNAL_ERROR);
@@ -186,6 +191,7 @@ public class SecStore {
 
             // generate master secret
             MasterSecret masterSecret;
+            //noinspection Duplicates
             try {
                 masterSecret = MasterSecret.generateMasterSecret(premasterSecret, clientHello, serverHello);
                 System.out.println("Master secret: " + Arrays.toString(masterSecret.getBytes()));
@@ -195,40 +201,46 @@ public class SecStore {
             }
 
             sp.setMasterSecret(masterSecret.getBytes());
-            ConnectionState state;
+
+            // receive client ChangeCipherSpec
+            recordLayer.getNextIncomingMessage().asChangeCipherSpecMessage();
+
+            // initialise the next connection state
             try {
-                state = new ConnectionState(sp);
+                nextConnState.init();
             } catch (NoSuchAlgorithmException | InvalidKeyException e) {
                 e.printStackTrace();
                 throw new FatalAlertException(AlertDescription.INTERNAL_ERROR);
             }
 
-            // receive client ChangeCipherSpec
-            recordLayer.getNextIncomingMessage().asChangeCipherSpecMessage();
-            recordLayer.setEncryptionOn(true);
+            // make pending connection state current
+            currentConnState = nextConnState;
 
+            // we update the record layer to use the new connection state after receiving a CCS
+            recordLayer.updateConnectionState(currentConnState);
 
-            // receive encrypted client Finished message
-            byte[] encryptedFinishedMessage = recordLayer.getNextIncomingMessage().getContent();
+            // ideally, the record layer should have decrypted the message for us
+            Finished clientFinished = (Finished) recordLayer.getNextIncomingMessage().asHandshakeMessage(HandshakeType.FINISHED);
 
-            System.out.println(DatatypeConverter.printHexBinary(encryptedFinishedMessage));
-
-            byte[] iv = Arrays.copyOf(encryptedFinishedMessage, state.getSecurityParameters().getBulkCipherAlgorithm().ivLength);
-            byte[] ciphertext = Arrays.copyOfRange(encryptedFinishedMessage, iv.length, encryptedFinishedMessage.length);
-
-            byte[] decryptedFinishedMessage;
-            try {
-                decryptedFinishedMessage = GenericBlockCipher.decrypt(state, new GenericBlockCipher(iv, ciphertext));
-            } catch (NoSuchPaddingException | NoSuchAlgorithmException | InvalidKeyException | BadPaddingException | IllegalBlockSizeException | InvalidAlgorithmParameterException e) {
-                e.printStackTrace();
-                throw new FatalAlertException(AlertDescription.INTERNAL_ERROR);
-            }
-
-            DatatypeConverter.printHexBinary(decryptedFinishedMessage);
+//            // receive encrypted client Finished message
+//            byte[] encryptedFinishedMessage = recordLayer.getNextIncomingMessage().getContent();
+//
+//            System.out.println(DatatypeConverter.printHexBinary(encryptedFinishedMessage));
+//
+//
+//            byte[] decryptedFinishedMessage;
+//            try {
+//                decryptedFinishedMessage = GenericBlockCipher.decrypt(state, new GenericBlockCipher(iv, ciphertext));
+//            } catch (NoSuchPaddingException | NoSuchAlgorithmException | InvalidKeyException | BadPaddingException | IllegalBlockSizeException | InvalidAlgorithmParameterException e) {
+//                e.printStackTrace();
+//                throw new FatalAlertException(AlertDescription.INTERNAL_ERROR);
+//            }
+//
+//            DatatypeConverter.printHexBinary(decryptedFinishedMessage);
 
             // verify client Finished message
-            Finished clientFinished = Finished.createClientFinishedMessage(masterSecret, clientHello, serverHello, certificate, serverHelloDone, clientKeyExchange);
-            System.out.println("client finished generated by server: " + DatatypeConverter.printHexBinary(clientFinished.getContent()));
+            Finished clientFinishedVerify = Finished.createClientFinishedMessage(masterSecret, clientHello, serverHello, certificate, serverHelloDone, clientKeyExchange);
+            System.out.println("client finished generated by server: " + DatatypeConverter.printHexBinary(clientFinishedVerify.getContent()));
 
 
         } catch (FatalAlertException e) {

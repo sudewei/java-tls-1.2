@@ -12,7 +12,7 @@ public interface Record {
 
     byte[] getContent();
 
-    byte[] toBytes();
+    byte[] getBytes();
 
     default byte[] getHeader() {
         assert getContent().length <= Short.MAX_VALUE;

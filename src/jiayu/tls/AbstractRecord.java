@@ -1,7 +1,6 @@
 package jiayu.tls;
 
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 
 abstract class AbstractRecord implements Record {
     private final ContentType contentType;
@@ -26,11 +25,11 @@ abstract class AbstractRecord implements Record {
 
     @Override
     public byte[] getContent() {
-        return Arrays.copyOf(content, content.length);
+        return content;
     }
 
     @Override
-    public byte[] toBytes() {
+    public byte[] getBytes() {
         return ByteBuffer.allocate(HEADER_LENGTH + getContent().length)
                 .put(getHeader())
                 .put(getContent())

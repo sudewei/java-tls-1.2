@@ -5,16 +5,18 @@ import java.security.NoSuchAlgorithmException;
 
 public class ConnectionState {
     private final SecurityParameters securityParameters;
-    private final byte[] clientWriteMACKey;
-    private final byte[] serverWriteMACKey;
-    private final byte[] clientWriteKey;
-    private final byte[] serverWriteKey;
+    private byte[] clientWriteMACKey;
+    private byte[] serverWriteMACKey;
+    private byte[] clientWriteKey;
+    private byte[] serverWriteKey;
 
     private long sequenceNumber;
 
-    public ConnectionState(SecurityParameters securityParameters) throws NoSuchAlgorithmException, InvalidKeyException {
-        this.securityParameters = securityParameters;
+    public ConnectionState(ConnectionEnd entity) {
+        this.securityParameters = new SecurityParameters(entity);
+    }
 
+    public void init() throws NoSuchAlgorithmException, InvalidKeyException {
         PRFAlgorithm prfAlgorithm = securityParameters.getPrfAlgorithm();
         byte[] masterSecret = securityParameters.getMasterSecret();
         byte[] serverRandom = securityParameters.getServerRandom();

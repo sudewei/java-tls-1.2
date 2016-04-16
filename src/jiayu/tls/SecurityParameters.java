@@ -7,7 +7,7 @@ public class SecurityParameters {
     private CipherType cipherType;
     private int encKeyLength;
     private int blockLength;
-//    for AEAD
+    //    for AEAD
 //    private int fixedIVLength;
 //    private int recordIVLength;
     private MACAlgorithm macAlgorithm;
@@ -18,8 +18,12 @@ public class SecurityParameters {
     private byte[] clientRandom;
     private byte[] serverRandom;
 
+
+    private CipherSuite cipherSuite;
+
     public SecurityParameters(ConnectionEnd connectionEnd) {
         this.connectionEnd = connectionEnd;
+        setCipherSuite(CipherSuite.TLS_NULL_WITH_NULL_NULL);
     }
 
     public ConnectionEnd getConnectionEnd() {
@@ -35,13 +39,22 @@ public class SecurityParameters {
     }
 
     public void setCipherSuite(CipherSuite cipherSuite) {
-        bulkCipherAlgorithm = cipherSuite.bulkCipherAlgorithm;
-        cipherType = bulkCipherAlgorithm.type;
-        encKeyLength = bulkCipherAlgorithm.encKeyLength;
-        blockLength = bulkCipherAlgorithm.blockLength;
-        macAlgorithm = cipherSuite.macAlgorithm;
-        macKeyLength = macAlgorithm.macKeyLength;
-        macLength = macAlgorithm.macLength;
+        this.cipherSuite = cipherSuite;
+
+        if (cipherSuite != CipherSuite.TLS_NULL_WITH_NULL_NULL) {
+            bulkCipherAlgorithm = cipherSuite.bulkCipherAlgorithm;
+            cipherType = bulkCipherAlgorithm.type;
+            encKeyLength = bulkCipherAlgorithm.encKeyLength;
+            blockLength = bulkCipherAlgorithm.blockLength;
+            macAlgorithm = cipherSuite.macAlgorithm;
+            macKeyLength = macAlgorithm.macKeyLength;
+            macLength = macAlgorithm.macLength;
+        }
+
+    }
+
+    public CipherSuite getCipherSuite() {
+        return cipherSuite;
     }
 
     public CipherType getCipherType() {

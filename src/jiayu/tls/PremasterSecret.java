@@ -6,11 +6,12 @@ import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
 import java.nio.ByteBuffer;
 import java.security.*;
+import java.util.Arrays;
 
 public class PremasterSecret {
     private byte[] bytes;
 
-    public PremasterSecret(byte[] bytes) {
+    private PremasterSecret(byte[] bytes) {
         this.bytes = bytes;
     }
 
@@ -24,6 +25,12 @@ public class PremasterSecret {
                 .array();
 
         return new PremasterSecret(bytes);
+    }
+
+    public static PremasterSecret fromBytes(byte[] bytes) {
+        byte[] encryptedPremasterSecret = Arrays.copyOfRange(bytes, 2, bytes.length);
+        assert ByteBuffer.wrap(bytes).getShort() == encryptedPremasterSecret.length;
+        return new PremasterSecret(encryptedPremasterSecret);
     }
 
     public byte[] getEncryptedBytes(PublicKey serverKey) throws BadPaddingException, IllegalBlockSizeException, InvalidKeyException, NoSuchPaddingException, NoSuchAlgorithmException {
