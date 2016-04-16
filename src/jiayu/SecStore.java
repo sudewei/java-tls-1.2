@@ -1,12 +1,10 @@
 package jiayu;
 
 import jiayu.tls.*;
-import jiayu.tls.Certificate;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
-import javax.xml.bind.DatatypeConverter;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -14,7 +12,10 @@ import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.NotDirectoryException;
 import java.nio.file.Path;
-import java.security.*;
+import java.security.InvalidKeyException;
+import java.security.KeyFactory;
+import java.security.NoSuchAlgorithmException;
+import java.security.PrivateKey;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.Arrays;
@@ -119,12 +120,22 @@ public class SecStore {
     public void receiveConnectionSecured(Socket socket) throws IOException {
         if (serverCert == null) throw new IllegalStateException();
 
-        ConnectionState currentConnState = new ConnectionState(ConnectionEnd.SERVER);
-        ConnectionState nextConnState = new ConnectionState(ConnectionEnd.SERVER);
+        SecurityParameters currSecParams = new SecurityParameters(ConnectionEnd.CLIENT);
+        ConnectionState currReadState = new ConnectionState();
+        ConnectionState currWriteState = new ConnectionState();
 
-        SecurityParameters sp = nextConnState.getSecurityParameters();
+        try {
+            currReadState.init(currSecParams);
+            currWriteState.init(currSecParams);
+        } catch (NoSuchAlgorithmException | InvalidKeyException e) {
+            e.printStackTrace();
+        }
 
-        RecordLayer recordLayer = RecordLayer.getInstance(socket, currentConnState);
+        RecordLayer recordLayer = RecordLayer.getInstance(socket, currReadState, currWriteState);
+
+        SecurityParameters securityParameters = new SecurityParameters(ConnectionEnd.SERVER);
+        ConnectionState pendingReadState = new ConnectionState();
+        ConnectionState pendingWriteState = new ConnectionState();
 
         // receive client hello
         System.out.print("Waiting for ClientHello... ");
@@ -136,7 +147,7 @@ public class SecStore {
             System.out.println("Received.");
             System.out.println(clientHello);
 
-            sp.setClientRandom(clientHello.getRandom().toBytes());
+            securityParameters.setClientRandom(clientHello.getRandom().toBytes());
 
             // choose cipher suite
             System.out.print("Choosing cipher suite... ");
@@ -146,7 +157,7 @@ public class SecStore {
                     : clientHello.getCipherSuites()[0];
             System.out.println("Selected cipher suite: " + selectedCipherSuite.name());
 
-            sp.setCipherSuite(selectedCipherSuite);
+            securityParameters.setCipherSuite(selectedCipherSuite);
 
             // send server hello
             System.out.print("Sending ServerHello... ");
@@ -155,7 +166,7 @@ public class SecStore {
             recordLayer.putNextOutgoingMessage(serverHello);
             System.out.println("Done.");
 
-            sp.setServerRandom(serverHello.getRandom().toBytes());
+            securityParameters.setServerRandom(serverHello.getRandom().toBytes());
 
             // send server serverCert
             System.out.print("Sending Certificate... ");
@@ -200,49 +211,66 @@ public class SecStore {
                 throw new FatalAlertException(AlertDescription.INTERNAL_ERROR);
             }
 
-            sp.setMasterSecret(masterSecret.getBytes());
+            securityParameters.setMasterSecret(masterSecret.getBytes());
 
-            // receive client ChangeCipherSpec
-            recordLayer.getNextIncomingMessage().asChangeCipherSpecMessage();
-
-            // initialise the next connection state
+            // now that all the security parameters have been established
+            // initialise the next read and write states
+            //noinspection Duplicates
             try {
-                nextConnState.init();
+                pendingWriteState.init(securityParameters);
+                pendingReadState.init(securityParameters);
             } catch (NoSuchAlgorithmException | InvalidKeyException e) {
                 e.printStackTrace();
                 throw new FatalAlertException(AlertDescription.INTERNAL_ERROR);
             }
 
-            // make pending connection state current
-            currentConnState = nextConnState;
+            // receive client ChangeCipherSpec
+            /*
+                Reception
+                of this message causes the receiver to instruct the record layer to
+                mmediately copy the read pending state into the read current state.
+             */
+            System.out.println("Waiting for client ChangeCipherSpec... ");
+            recordLayer.getNextIncomingMessage().asChangeCipherSpecMessage();
+            System.out.println("Received client ChangeCipherSpec.");
 
-            // we update the record layer to use the new connection state after receiving a CCS
-            recordLayer.updateConnectionState(currentConnState);
+            // make pending read state current
+            recordLayer.updateReadState(pendingReadState);
+            currReadState = pendingReadState;
 
             // ideally, the record layer should have decrypted the message for us
+            System.out.println("Waiting for client Finished....");
             Finished clientFinished = (Finished) recordLayer.getNextIncomingMessage().asHandshakeMessage(HandshakeType.FINISHED);
-
-//            // receive encrypted client Finished message
-//            byte[] encryptedFinishedMessage = recordLayer.getNextIncomingMessage().getContent();
-//
-//            System.out.println(DatatypeConverter.printHexBinary(encryptedFinishedMessage));
-//
-//
-//            byte[] decryptedFinishedMessage;
-//            try {
-//                decryptedFinishedMessage = GenericBlockCipher.decrypt(state, new GenericBlockCipher(iv, ciphertext));
-//            } catch (NoSuchPaddingException | NoSuchAlgorithmException | InvalidKeyException | BadPaddingException | IllegalBlockSizeException | InvalidAlgorithmParameterException e) {
-//                e.printStackTrace();
-//                throw new FatalAlertException(AlertDescription.INTERNAL_ERROR);
-//            }
-//
-//            DatatypeConverter.printHexBinary(decryptedFinishedMessage);
+            System.out.println("Received client Finished.");
 
             // verify client Finished message
-            Finished clientFinishedVerify = Finished.createClientFinishedMessage(masterSecret, clientHello, serverHello, certificate, serverHelloDone, clientKeyExchange);
-            System.out.println("client finished generated by server: " + DatatypeConverter.printHexBinary(clientFinishedVerify.getContent()));
+            System.out.println("Verifying client Finished... ");
+            Finished clientFinishedVerify = Finished.createClientFinishedMessage(masterSecret,
+                    clientHello, serverHello, certificate, serverHelloDone, clientKeyExchange);
+            if (!Arrays.equals(clientFinished.getContent(), clientFinishedVerify.getContent()))
+                throw new FatalAlertException(AlertDescription.DECRYPT_ERROR);
+            System.out.println("Verified client Finished.");
 
+            // send server ChangeCipherSpec message
+            /*
+                Immediately after sending this message, the sender MUST instruct the
+                record layer to make the write pending state the write active state.
+             */
+            System.out.println("Sending server ChangeCipherSpec... ");
+            ChangeCipherSpecMessage changeCipherSpecMessage = new ChangeCipherSpecMessage();
+            recordLayer.putNextOutgoingMessage(changeCipherSpecMessage);
+            System.out.println("Sent server ChangeCipherSpec.");
 
+            // make the pending write state the current write state
+            recordLayer.updateWriteState(pendingWriteState);
+            currWriteState = pendingWriteState;
+
+            // send server Finished message
+            System.out.println("Sending server Finished...");
+            Finished serverFinished = Finished.createServerFinishedMessage(masterSecret,
+                    clientHello, serverHello, certificate, serverHelloDone, clientKeyExchange, clientFinished);
+            recordLayer.putNextOutgoingMessage(serverFinished);
+            System.out.println("Sent server Finished.");
         } catch (FatalAlertException e) {
             e.printStackTrace();
         }

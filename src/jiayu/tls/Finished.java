@@ -99,6 +99,14 @@ public class Finished extends HandshakeMessage {
         return Arrays.copyOf(hmac.doFinal(), VERIFY_DATA_LENGTH);
     }
 
+    static Finished interpret(GenericHandshakeMessage handshake) throws FatalAlertException {
+        if (handshake.getType() != HandshakeType.FINISHED) {
+            throw new FatalAlertException(AlertDescription.UNEXPECTED_MESSAGE);
+        }
+
+        return new Finished(handshake.getContent());
+    }
+
     private byte[] toBytes() {
         return ByteBuffer.allocate(HEADER_LENGTH + length)
                 .put(header)

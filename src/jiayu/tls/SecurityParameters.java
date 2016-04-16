@@ -45,12 +45,11 @@ public class SecurityParameters {
             bulkCipherAlgorithm = cipherSuite.bulkCipherAlgorithm;
             cipherType = bulkCipherAlgorithm.type;
             encKeyLength = bulkCipherAlgorithm.encKeyLength;
-            blockLength = bulkCipherAlgorithm.blockLength;
+            blockLength = bulkCipherAlgorithm.blockSize;
             macAlgorithm = cipherSuite.macAlgorithm;
             macKeyLength = macAlgorithm.macKeyLength;
             macLength = macAlgorithm.macLength;
         }
-
     }
 
     public CipherSuite getCipherSuite() {

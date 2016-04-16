@@ -20,19 +20,19 @@ class DefaultRecordLayerImpl implements RecordLayer {
     private final DataOutputStream out;
     private final DataInputStream in;
 
-    private ConnectionState connectionState;
+    private ConnectionState readState;
+    private ConnectionState writeState;
 
     private ContentType leftoversType;
     private ByteQueue inputQueue;
 
-    private GenericBlockCipherEncryptionProvider encryptionProvider;
-
-    DefaultRecordLayerImpl(Socket socket, ConnectionState state) throws IOException {
+    DefaultRecordLayerImpl(Socket socket, ConnectionState readState, ConnectionState writeState) throws IOException {
         this.socket = socket;
         out = new DataOutputStream(socket.getOutputStream());
         in = new DataInputStream(socket.getInputStream());
 
-        updateConnectionState(state);
+        updateWriteState(writeState);
+        updateReadState(readState);
 
         inputQueue = new ByteQueue();
     }
@@ -99,16 +99,6 @@ class DefaultRecordLayerImpl implements RecordLayer {
         }
     }
 
-    @Override
-    public void updateConnectionState(ConnectionState newState) {
-        this.connectionState = newState;
-        System.out.println("Record Layer connection state updated: new cipher suite: " + newState.getSecurityParameters().getCipherSuite());
-
-        if (newState.getSecurityParameters().getCipherSuite() == CipherSuite.TLS_RSA_WITH_AES_128_CBC_SHA256) {
-            encryptionProvider = new GenericBlockCipherEncryptionProvider(newState);
-        }
-    }
-
     /**
      * Reads the next incoming Record and adds its contents to the input queue
      *
@@ -135,37 +125,55 @@ class DefaultRecordLayerImpl implements RecordLayer {
         byte[] incRecordContent = new byte[incRecordLength];
         in.readFully(incRecordContent);
 
-        if (connectionState.getSecurityParameters().getCipherSuite() == CipherSuite.TLS_NULL_WITH_NULL_NULL) {
+        if (readState.getEncryptionAlgorithm() == null) {
             return new TLSPlaintext(incRecordType, incRecordProtocol, incRecordContent);
         } else {
             TLSCiphertext nextIncRecord = new TLSCiphertext(incRecordType, incRecordProtocol, incRecordContent);
             try {
-                byte[] incContent = encryptionProvider.decrypt(nextIncRecord);
+                byte[] incContent = GenericBlockCipherEncryptionProvider.decrypt(readState, nextIncRecord);
                 return new TLSPlaintext(incRecordType, incRecordProtocol, incContent);
             } catch (NoSuchPaddingException | NoSuchAlgorithmException | InvalidKeyException | BadPaddingException | IllegalBlockSizeException | InvalidAlgorithmParameterException e) {
                 e.printStackTrace();
                 throw new FatalAlertException(AlertDescription.INTERNAL_ERROR);
             }
         }
-
     }
 
     @Override
     public void putNextOutgoingMessage(ProtocolMessage message) throws IOException {
         // no encryption
-        if (connectionState.getSecurityParameters().getCipherSuite() == CipherSuite.TLS_NULL_WITH_NULL_NULL) {
+        if (writeState.getEncryptionAlgorithm() == null) {
             TLSPlaintext tlsPlaintext = new TLSPlaintext(message);
             out.write(tlsPlaintext.getBytes());
         } else {
             // else we need to encrypt the message before sending it
             try {
-                GenericBlockCipher encryptedMessage = encryptionProvider.encrypt(message);
+                GenericBlockCipher encryptedMessage = GenericBlockCipherEncryptionProvider.encrypt(writeState, message);
                 TLSCiphertext tlsCiphertext = new TLSCiphertext(encryptedMessage);
                 out.write(tlsCiphertext.getBytes());
             } catch (InvalidKeyException | NoSuchAlgorithmException | BadPaddingException | InvalidAlgorithmParameterException | NoSuchPaddingException | IllegalBlockSizeException e) {
                 e.printStackTrace();
             }
         }
+    }
 
+    @Override
+    public ConnectionState getWriteState() {
+        return writeState;
+    }
+
+    @Override
+    public void updateWriteState(ConnectionState newState) {
+        writeState = newState;
+    }
+
+    @Override
+    public ConnectionState getReadState() {
+        return writeState;
+    }
+
+    @Override
+    public void updateReadState(ConnectionState newState) {
+        readState = newState;
     }
 }

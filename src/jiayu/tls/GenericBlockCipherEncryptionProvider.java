@@ -11,47 +11,29 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.Arrays;
 
-public class GenericBlockCipherEncryptionProvider {
-    private final ConnectionState state;
+class GenericBlockCipherEncryptionProvider {
+    private GenericBlockCipherEncryptionProvider() {
 
-    private final ConnectionEnd connectionEnd;
-
-    private BulkCipherAlgorithm algorithm;
-    private MACAlgorithm macAlgorithm;
-
-    private byte[] clientWriteMACKey;
-    private byte[] serverWriteMACKey;
-    private byte[] clientWriteKey;
-    private byte[] serverWriteKey;
-
-    private final int ivLength;
-    private final int blockSize;
-    private final int macLength;
-
-    public GenericBlockCipherEncryptionProvider(ConnectionState state) {
-        this.state = state;
-
-        connectionEnd = state.getSecurityParameters().getConnectionEnd();
-
-        algorithm = state.getSecurityParameters().getBulkCipherAlgorithm();
-        macAlgorithm = state.getSecurityParameters().getMacAlgorithm();
-
-        clientWriteMACKey = state.getClientWriteMACKey();
-        serverWriteMACKey = state.getServerWriteMACKey();
-        clientWriteKey = state.getClientWriteKey();
-        serverWriteKey = state.getServerWriteKey();
-
-        ivLength = algorithm.ivLength;
-        blockSize = algorithm.blockLength;
-        macLength = macAlgorithm.macLength;
     }
 
-    public GenericBlockCipher encrypt(ProtocolMessage message) throws InvalidKeyException, NoSuchAlgorithmException, InvalidAlgorithmParameterException, BadPaddingException, IllegalBlockSizeException, NoSuchPaddingException {
-        long seqNum = state.getSequenceNumber();
+    static GenericBlockCipher encrypt(ConnectionState writeState, ProtocolMessage message) throws InvalidKeyException, NoSuchAlgorithmException, InvalidAlgorithmParameterException, BadPaddingException, IllegalBlockSizeException, NoSuchPaddingException {
+        assert writeState.getSecurityParameters().getCipherSuite() != CipherSuite.TLS_NULL_WITH_NULL_NULL;
+
+        BulkCipherAlgorithm algorithm = writeState.getEncryptionAlgorithm();
+        int ivLength = algorithm.ivLength;
+        int blockSize = algorithm.blockSize;
+        MACAlgorithm macAlgorithm = writeState.getMacAlgorithm();
+        int macLength = macAlgorithm.macLength;
+
+        long seqNum = writeState.getSequenceNumber();
 
         // when encrypting, the write key corresponding to the connection end is used
-        byte[] encKey = connectionEnd == ConnectionEnd.CLIENT ? clientWriteKey : serverWriteKey;
-        byte[] macKey = connectionEnd == ConnectionEnd.CLIENT ? clientWriteMACKey : serverWriteMACKey;
+        byte[] encKey = writeState.getSecurityParameters().getConnectionEnd() == ConnectionEnd.CLIENT ?
+                writeState.getClientWriteKey()
+                : writeState.getServerWriteKey();
+        byte[] macKey = writeState.getSecurityParameters().getConnectionEnd() == ConnectionEnd.CLIENT
+                ? writeState.getClientWriteMACKey()
+                : writeState.getServerWriteMACKey();
 
         TLSPlaintext tlsPlaintext = new TLSPlaintext(message);
         byte[] plaintext = tlsPlaintext.getContent();
@@ -77,30 +59,41 @@ public class GenericBlockCipherEncryptionProvider {
                 .put(plaintextMAC);
         Arrays.fill(fragment.array(), lengthBefPad - 1, fragment.capacity(), (byte) padAmount);
 
-        Cipher cipher = Cipher.getInstance("AES/CBC/NoPadding");
         byte[] iv = new byte[ivLength];
         new SecureRandom().nextBytes(iv);
         System.out.println("Encrypting using IV: " + DatatypeConverter.printHexBinary(iv));
-        cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(encKey, "AES"), new IvParameterSpec(iv));
+        Cipher cipher = Cipher.getInstance(algorithm.transformation);
+        cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(encKey, algorithm.keySpec), new IvParameterSpec(iv));
         byte[] ciphertext = cipher.doFinal(fragment.array());
         System.out.println("Ciphertext: " + DatatypeConverter.printHexBinary(ciphertext));
 
         return new GenericBlockCipher(message.getContentType(), iv, ciphertext);
     }
 
-    public byte[] decrypt(TLSCiphertext tlsCiphertext) throws FatalAlertException, NoSuchPaddingException, NoSuchAlgorithmException, InvalidAlgorithmParameterException, InvalidKeyException, BadPaddingException, IllegalBlockSizeException {
-        long seqNum = state.getSequenceNumber();
+    static byte[] decrypt(ConnectionState readState, TLSCiphertext tlsCiphertext) throws FatalAlertException, NoSuchPaddingException, NoSuchAlgorithmException, InvalidAlgorithmParameterException, InvalidKeyException, BadPaddingException, IllegalBlockSizeException {
+        assert readState.getSecurityParameters().getCipherSuite() != CipherSuite.TLS_NULL_WITH_NULL_NULL;
+
+        BulkCipherAlgorithm algorithm = readState.getEncryptionAlgorithm();
+        int ivLength = algorithm.ivLength;
+        MACAlgorithm macAlgorithm = readState.getMacAlgorithm();
+        int macLength = macAlgorithm.macLength;
+
+        long seqNum = readState.getSequenceNumber();
 
         // when decrypting, the write key corresponding to the opposite connection end is used
-        byte[] encKey = connectionEnd != ConnectionEnd.CLIENT ? clientWriteKey : serverWriteKey;
-        byte[] macKey = connectionEnd != ConnectionEnd.CLIENT ? clientWriteMACKey : serverWriteMACKey;
+        byte[] encKey = readState.getSecurityParameters().getConnectionEnd() != ConnectionEnd.CLIENT
+                ? readState.getClientWriteKey()
+                : readState.getServerWriteKey();
+        byte[] macKey = readState.getSecurityParameters().getConnectionEnd() != ConnectionEnd.CLIENT
+                ? readState.getClientWriteMACKey()
+                : readState.getServerWriteMACKey();
 
         byte[] iv = Arrays.copyOf(tlsCiphertext.getContent(), ivLength);
         System.out.println("Decrypting with IV: " + DatatypeConverter.printHexBinary(iv));
         byte[] cipherText = Arrays.copyOfRange(tlsCiphertext.getContent(), ivLength, tlsCiphertext.getContent().length);
 
-        Cipher cipher = Cipher.getInstance("AES/CBC/NoPadding");
-        cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(encKey, "AES"), new IvParameterSpec(iv));
+        Cipher cipher = Cipher.getInstance(algorithm.transformation);
+        cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(encKey, algorithm.keySpec), new IvParameterSpec(iv));
 
         // the decrypted fragment is comprised of the plaintext, the plaintext mac and the padding
         byte[] fragment = cipher.doFinal(cipherText);
@@ -110,7 +103,7 @@ public class GenericBlockCipherEncryptionProvider {
         int plaintextLength = fragment.length - paddingLength - macLength - 1;
 
         for (int i = 0; i < paddingLength; i++) {
-            if (fragment[plaintextLength + macLength + i] != paddingLength)
+            if ((fragment[plaintextLength + macLength + i] & 0xFF) != paddingLength)
                 throw new FatalAlertException(AlertDescription.BAD_RECORD_MAC);
         }
 
@@ -125,8 +118,6 @@ public class GenericBlockCipherEncryptionProvider {
         return plaintext;
     }
 
-
-
     private static byte[] MAC(MACAlgorithm algorithm, byte[] macWriteKey, long seqNum, TLSPlaintext tlsPlaintext) throws NoSuchAlgorithmException, InvalidKeyException {
         Mac mac = Mac.getInstance(algorithm.name);
         mac.init(new SecretKeySpec(macWriteKey, algorithm.name));
@@ -136,5 +127,4 @@ public class GenericBlockCipherEncryptionProvider {
 
         return mac.doFinal();
     }
-
 }

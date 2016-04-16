@@ -4,7 +4,12 @@ import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 
 public class ConnectionState {
-    private final SecurityParameters securityParameters;
+    private SecurityParameters securityParameters;
+
+    private CompressionMethod compressionAlgorithm;
+    private BulkCipherAlgorithm encryptionAlgorithm;
+    private MACAlgorithm macAlgorithm;
+
     private byte[] clientWriteMACKey;
     private byte[] serverWriteMACKey;
     private byte[] clientWriteKey;
@@ -12,11 +17,20 @@ public class ConnectionState {
 
     private long sequenceNumber;
 
-    public ConnectionState(ConnectionEnd entity) {
-        this.securityParameters = new SecurityParameters(entity);
+    public ConnectionState() {
+        compressionAlgorithm = null;
+        encryptionAlgorithm = null;
+        macAlgorithm = null;
     }
 
-    public void init() throws NoSuchAlgorithmException, InvalidKeyException {
+    public void init(SecurityParameters securityParameters) throws NoSuchAlgorithmException, InvalidKeyException {
+        this.securityParameters = securityParameters;
+        if (securityParameters.getCipherSuite() == CipherSuite.TLS_NULL_WITH_NULL_NULL) return;
+
+        this.compressionAlgorithm = securityParameters.getCompressionMethod();
+        this.encryptionAlgorithm = securityParameters.getBulkCipherAlgorithm();
+        this.macAlgorithm = securityParameters.getMacAlgorithm();
+
         PRFAlgorithm prfAlgorithm = securityParameters.getPrfAlgorithm();
         byte[] masterSecret = securityParameters.getMasterSecret();
         byte[] serverRandom = securityParameters.getServerRandom();
@@ -32,6 +46,18 @@ public class ConnectionState {
         serverWriteKey = prf.getBytes(encKeyLength);
 
         sequenceNumber = 0;
+    }
+
+    public CompressionMethod getCompressionAlgorithm() {
+        return compressionAlgorithm;
+    }
+
+    public BulkCipherAlgorithm getEncryptionAlgorithm() {
+        return encryptionAlgorithm;
+    }
+
+    public MACAlgorithm getMacAlgorithm() {
+        return macAlgorithm;
     }
 
     public SecurityParameters getSecurityParameters() {

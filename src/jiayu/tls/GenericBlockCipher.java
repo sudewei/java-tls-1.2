@@ -101,7 +101,7 @@ public class GenericBlockCipher implements ProtocolMessage {
 //                ? state.getServerWriteKey()
 //                : state.getClientWriteKey();
 //        cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(writeKey, "AES"), new IvParameterSpec(iv));
-//        assert blockCipher.getCiphertext().length % state.getSecurityParameters().getBulkCipherAlgorithm().blockLength == 0;
+//        assert blockCipher.getCiphertext().length % state.getSecurityParameters().getBulkCipherAlgorithm().blockSize == 0;
 //        byte[] plainTextMacPadding = cipher.doFinal(blockCipher.getCiphertext());
 //
 //        System.out.println("Plaintext, mac and padding: " + DatatypeConverter.printHexBinary(plainTextMacPadding));

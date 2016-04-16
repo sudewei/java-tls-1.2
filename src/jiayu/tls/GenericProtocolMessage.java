@@ -49,11 +49,10 @@ public class GenericProtocolMessage implements ProtocolMessage {
             case SERVER_HELLO_DONE:
                 return ServerHelloDone.interpret(handshake);
             case CLIENT_KEY_EXCHANGE:
-                // TODO: 15/04/2016
                 return ClientKeyExchange.interpret(handshake);
             case FINISHED:
                 // TODO: 15/04/2016
-                return null;
+                return Finished.interpret(handshake);
             default:
                 throw new FatalAlertException(AlertDescription.INTERNAL_ERROR);
         }
