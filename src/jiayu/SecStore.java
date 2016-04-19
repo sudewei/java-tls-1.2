@@ -26,11 +26,16 @@ import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Scanner;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class SecStore {
     private static final int CP1 = 1;
     private static final int CP2 = 2;
+
+    private final ExecutorService executorService;
 
     private Path destDir;
     private SecureServerSocket sss;
@@ -39,6 +44,12 @@ public class SecStore {
     private boolean interactive;
 
     public SecStore() throws IOException {
+        int numCores = Runtime.getRuntime().availableProcessors();
+        System.out.println("Number of available cores: " + numCores);
+        System.out.println(String.format("Using %d threads.", numCores));
+        executorService = Executors.newFixedThreadPool(numCores);
+
+        sss = new SecureServerSocket();
         listening = false;
     }
 
@@ -59,37 +70,62 @@ public class SecStore {
     }
 
     public void listen() throws IOException {
-        receiveFile(sss.acceptSecured());
-    }
-
-    public void listen(Handler handler) throws IOException {
         listening = true;
         while (listening) {
-            handler.handle(sss.acceptSecured());
+
+            SecureSocket ss = sss.acceptSecured();
+            executorService.execute(() -> {
+                System.out.println(Thread.currentThread().getName() + " handling a request.");
+                receiveFile(ss);
+            });
         }
     }
+
+//    public void listen(Handler handler) throws IOException {
+//        listening = true;
+//        while (listening) {
+//
+//            SecureSocket ss = sss.acceptSecured();
+//            executorService.execute(() -> receiveFile(ss));
+//        }
+//    }
 
     public void receiveBytes(byte[] bytes) {
 
     }
 
-    public void receiveFile(SecureSocket ss) throws IOException {
+    public void receiveFile(SecureSocket ss) {
         if (destDir == null) throw new IllegalStateException("no destination directory set");
 
         SecureSocketInputStream in = ss.getInputStream();
         OutputStream out = ss.getOutputStream();
 
         ByteBuffer buf = ByteBuffer.allocate(1 + Integer.BYTES);
-        in.readFully(buf.array());
+        try {
+            in.readFully(buf.array());
+        } catch (IOException e) {
+            e.printStackTrace();
+            throw new RuntimeException();
+        }
 
         int protocol = buf.get();
         int keyLength = buf.getInt();
 
         byte[] keyBytes = new byte[keyLength];
-        in.readFully(keyBytes);
+        try {
+            in.readFully(keyBytes);
+        } catch (IOException e) {
+            e.printStackTrace();
+            throw new RuntimeException();
+        }
 
         buf = ByteBuffer.allocate(Integer.BYTES);
-        in.readFully(buf.array());
+        try {
+            in.readFully(buf.array());
+        } catch (IOException e) {
+            e.printStackTrace();
+            throw new RuntimeException();
+        }
         int dataLength = buf.getInt();
 
         ByteArrayOutputStream plaintext = new ByteArrayOutputStream();
@@ -122,7 +158,7 @@ public class SecStore {
 
         byte[] checksumVerify = Metadata.calculateChecksum(fileBytes);
         if (!Arrays.equals(metadata.getChecksum(), checksumVerify)) {
-            throw new IOException();
+            throw new RuntimeException();
         } else System.out.println("File verified.");
 
 
@@ -131,18 +167,32 @@ public class SecStore {
         try {
             Files.write(destDir.resolve(filename), fileBytes, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
         } catch (IOException e) {
-            out.write(0);
+            try {
+                out.write(0);
+            } catch (IOException e1) {
+                throw new RuntimeException();
+            }
         }
 
-        out.write(1);
-        out.flush();
+        try {
+            out.write(1);
+            out.flush();
+        } catch (IOException e) {
+            e.printStackTrace();
+            throw new RuntimeException();
+        }
     }
 
-    private byte[] decryptCP2(SecureSocketInputStream in, byte[] keyBytes, int dataLength) throws IOException {
+    private byte[] decryptCP2(SecureSocketInputStream in, byte[] keyBytes, int dataLength) {
         byte[] content;
 
         byte[] toDecrypt = new byte[dataLength];
-        in.readFully(toDecrypt);
+        try {
+            in.readFully(toDecrypt);
+        } catch (IOException e) {
+            e.printStackTrace();
+            throw new RuntimeException();
+        }
 
         SecretKeySpec sks = new SecretKeySpec(keyBytes, "AES");
         try {
@@ -156,12 +206,17 @@ public class SecStore {
         return content;
     }
 
-    private static byte[] decryptCP1(SecureSocketInputStream in, byte[] keyBytes, int dataLength) throws IOException {
+    private static byte[] decryptCP1(SecureSocketInputStream in, byte[] keyBytes, int dataLength) {
         ArrayList<byte[]> ciphertext = new ArrayList<>();
         int bytesRead = 0;
         while (bytesRead < dataLength) {
             byte[] block = new byte[128];
-            in.readFully(block);
+            try {
+                in.readFully(block);
+            } catch (IOException e) {
+                e.printStackTrace();
+                throw new RuntimeException();
+            }
             bytesRead += 128;
             ciphertext.add(block);
         }
@@ -192,13 +247,19 @@ public class SecStore {
 
         // reassemble content
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        for (byte[] bytes : plaintext) out.write(bytes);
+        for (byte[] bytes : plaintext)
+            try {
+                out.write(bytes);
+            } catch (IOException e) {
+                e.printStackTrace();
+                throw new RuntimeException();
+            }
         return out.toByteArray();
     }
 
     @FunctionalInterface
     public interface Handler {
-        void handle(SecureSocket ss) throws IOException;
+        void handle(SecureSocket ss);
     }
 
     private void startInteractiveMode() {
@@ -228,7 +289,7 @@ public class SecStore {
             case "bind":
                 int port;
                 try {
-                    if (args[0] == null) {
+                    if (args.length < 1) {
                         System.out.println("invalid arguments!");
                         return;
                     }
@@ -243,21 +304,32 @@ public class SecStore {
                 }
                 break;
             case "newsocket":
+                if (sss != null) {
+                    System.out.println("SecStore already has an underlying socket.");
+                }
                 sss = new SecureServerSocket();
                 System.out.println("Socket initialised.");
                 break;
             case "listen":
                 try {
                     System.out.println("Server listening...");
-                    listen(this::receiveFile);
+                    listen();
                 } catch (IOException e) {
                     System.out.println("ERROR");
                     e.printStackTrace();
                 }
                 break;
+            case "quickstart":
+                if (args.length < 1) {
+                    System.out.println("ERROR: invalid config file");
+                    return;
+                }
+                startFromConfigFile(Paths.get(args[0]));
+
+                break;
             case "stop":
                 try {
-                    System.out.println("Trying to close underlying socket... (You may see some error messages.)");
+                    System.out.println("Closing underlying socket... (You may see some error messages.)");
                     sss.close();
                 } catch (IOException e) {
                     e.printStackTrace();
@@ -277,8 +349,7 @@ public class SecStore {
         switch (args[0]) {
             case "servercert":
                 try {
-                    System.out.println(Arrays.toString(args));
-                    if (args[1] == null) {
+                    if (args.length < 2) {
                         System.out.println("invalid arguments!");
                         return;
                     }
@@ -291,7 +362,7 @@ public class SecStore {
                 break;
             case "serverkey":
                 try {
-                    if (args[1] == null) {
+                    if (args.length < 2) {
                         System.out.println("invalid arguments!");
                         return;
                     }
@@ -304,11 +375,11 @@ public class SecStore {
                 }
                 break;
             case "destdir":
-                setDestDir(Paths.get(args[1]));
-                if (args[1] == null) {
+                if (args.length < 2) {
                     System.out.println("invalid arguments!");
                     return;
                 }
+                setDestDir(Paths.get(args[1]));
                 System.out.println("New destination directory set.");
                 break;
             default:
@@ -320,9 +391,28 @@ public class SecStore {
         try {
             SecStore store = new SecStore();
             System.out.println("Starting SecStore interactive mode");
-            System.out.println("You should probably create a new socket instance with 'newsocket' first.");
             store.startInteractiveMode();
         } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void startFromConfigFile(Path configFile) {
+        if (!Files.exists(configFile)) throw new IllegalStateException();
+
+        try {
+            List<String> config = Files.readAllLines(configFile);
+            if (config.size() < 3) throw new IOException();
+            if (sss == null) sss = new SecureServerSocket();
+            setServerCert(Paths.get(config.get(0)));
+            setServerKey(Paths.get(config.get(1)));
+            setDestDir(Paths.get(config.get(2)));
+            bind(Integer.parseInt(config.get(3)));
+            System.out.println("Listening...");
+            listen();
+
+        } catch (IOException | NoSuchAlgorithmException | InvalidKeySpecException | NumberFormatException e) {
+            System.out.println("Invalid config file!");
             e.printStackTrace();
         }
     }

@@ -89,7 +89,7 @@ public class CP1Client extends AbstractSecStoreClient {
         long endTime = System.currentTimeMillis();
 
         System.out.println();
-        System.out.println("Encryption time: " + (endTime - startTime));
+        System.out.println("Encryption time: " + (endTime - startTime) + " ms");
 
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         byte[] pubKeyBytes = publicKey.getEncoded();
@@ -106,9 +106,13 @@ public class CP1Client extends AbstractSecStoreClient {
         for (byte[] bytes : ciphertextBlocksArray) output.write(bytes);
 
         System.out.println("Sending data to server...");
+        startTime = System.currentTimeMillis();
         out.write(output.toByteArray());
         System.out.println("Waiting for server response");
-        return in.read() == 1;
+        boolean success = in.read() == 1;
+        endTime = System.currentTimeMillis();
+        System.out.println("Round trip time: " + (endTime - startTime) + " ms");
+        return success;
     }
 
     private void encryptSequential(Key privateKey, Object[] src, byte[][] dst) {

@@ -35,6 +35,12 @@ public class SecStoreTest {
         store.listen();
     }
 
+    @Test
+    public void testConfigFile() throws Exception {
+//        SecStore.startFromConfigFile(Paths.get("C:\\Users\\jiayu\\IdeaProjects\\tls-1.2-implementation-java\\misc\\test_setup\\jy-pc3_config"));
+
+    }
+
     private void handle(SecureSocket ss) throws IOException {
         SecureSocketInputStream in = ss.getInputStream();
         OutputStream out = ss.getOutputStream();
@@ -118,19 +124,20 @@ public class SecStoreTest {
         out.write(1);
         out.flush();
     }
-
-    @Test
-    public void testCP1() throws Exception {
-        SecStore store = new SecStore();
-        store.bind(4443);
-        store.listen(this::handle);
-    }
-
-    @Test
-    public void testGenericReceiveFile() throws Exception {
-        SecStore store = new SecStore();
-        store.setDestDir(Paths.get("misc/files/downloaddest"));
-        store.bind(4443);
-        store.listen(store::receiveFile);
-    }
 }
+
+//    @Test
+//    public void testCP1() throws Exception {
+//        SecStore store = new SecStore();
+//        store.bind(4443);
+//        store.listen(this::handle);
+//    }
+
+//    @Test
+//    public void testGenericReceiveFile() throws Exception {
+//        SecStore store = new SecStore();
+//        store.setDestDir(Paths.get("misc/files/downloaddest"));
+//        store.bind(4443);
+//        store.listen(store::receiveFile);
+//    }
+//}

@@ -19,7 +19,7 @@ public class CP2Client extends AbstractSecStoreClient {
         try {
             SecStoreClient client = SecStoreClient.getInstance("CP2");
             client.addCACert(Paths.get("C:\\Users\\jiayu\\IdeaProjects\\tls-1.2-implementation-java\\misc\\certs\\servercert.crt"));
-            client.connect("139.59.245.167", 4443);
+            client.connect("localhost", 4443);
             boolean b = client.uploadFile("misc/files/1MB");
             if (b) {
                 System.out.println("Upload success!");
@@ -64,7 +64,7 @@ public class CP2Client extends AbstractSecStoreClient {
             long startTime = System.currentTimeMillis();
             byte[] encrypted = cipher.doFinal(toEncrypt.toByteArray());
             long endTime = System.currentTimeMillis();
-            System.out.println("Encryption time: " + (endTime - startTime));
+            System.out.println("Encryption time: " + (endTime - startTime) + " ms");
 
             toSend.write(UInt.itob(encrypted.length));
             toSend.write(encrypted);
@@ -74,8 +74,12 @@ public class CP2Client extends AbstractSecStoreClient {
         }
 
         System.out.println("Sending data to server...");
+        long startTime = System.currentTimeMillis();;
         out.write(toSend.toByteArray());
         System.out.println("Waiting for server response...");
-        return in.read() == 1;
+        boolean success = in.read() == 1;
+        long endTime = System.currentTimeMillis();
+        System.out.println("Round trip time: " + (endTime - startTime) + " ms");
+        return success;
     }
 }
