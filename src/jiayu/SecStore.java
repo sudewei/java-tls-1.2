@@ -55,7 +55,6 @@ public class SecStore {
     }
 
     public void bind(int port) throws IOException {
-        sss = new SecureServerSocket();
         sss.bind(port);
     }
 
@@ -243,6 +242,10 @@ public class SecStore {
                     e.printStackTrace();
                 }
                 break;
+            case "newsocket":
+                sss = new SecureServerSocket();
+                System.out.println("Socket initialised.");
+                break;
             case "listen":
                 try {
                     System.out.println("Server listening...");
@@ -274,11 +277,12 @@ public class SecStore {
         switch (args[0]) {
             case "servercert":
                 try {
-                    setServerCert(Paths.get(args[1]));
+                    System.out.println(Arrays.toString(args));
                     if (args[1] == null) {
                         System.out.println("invalid arguments!");
                         return;
                     }
+                    setServerCert(Paths.get(args[1]));
                     System.out.println("New server cert set.");
                 } catch (IOException e) {
                     System.out.println("ERROR");
@@ -316,6 +320,7 @@ public class SecStore {
         try {
             SecStore store = new SecStore();
             System.out.println("Starting SecStore interactive mode");
+            System.out.println("You should probably create a new socket instance with 'newsocket' first.");
             store.startInteractiveMode();
         } catch (IOException e) {
             e.printStackTrace();
