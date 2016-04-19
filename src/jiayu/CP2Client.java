@@ -19,7 +19,7 @@ public class CP2Client extends AbstractSecStoreClient {
         try {
             SecStoreClient client = SecStoreClient.getInstance("CP2");
             client.addCACert(Paths.get("C:\\Users\\jiayu\\IdeaProjects\\tls-1.2-implementation-java\\misc\\certs\\servercert.crt"));
-            client.connect("localhost", 4443);
+            client.connect("139.59.245.167", 4443);
             boolean b = client.uploadFile("misc/files/1MB");
             if (b) {
                 System.out.println("Upload success!");

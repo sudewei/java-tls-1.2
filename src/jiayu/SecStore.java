@@ -40,7 +40,6 @@ public class SecStore {
 
     public SecStore() throws IOException {
         listening = false;
-        sss = new SecureServerSocket();
     }
 
     public void setServerCert(Path serverCert) throws IOException {
@@ -56,6 +55,7 @@ public class SecStore {
     }
 
     public void bind(int port) throws IOException {
+        sss = new SecureServerSocket();
         sss.bind(port);
     }
 
@@ -128,9 +128,12 @@ public class SecStore {
 
 
         String filename = metadata.getFilename();
-        Path destDir = Paths.get("misc/files/downloaddest");
 
-        Files.write(destDir.resolve(filename), fileBytes, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
+        try {
+            Files.write(destDir.resolve(filename), fileBytes, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
+        } catch (IOException e) {
+            out.write(0);
+        }
 
         out.write(1);
         out.flush();
@@ -246,8 +249,16 @@ public class SecStore {
                 }
                 break;
             case "stop":
+                try {
+                    System.out.println("Trying to close underlying socket... (You may see some error messages.)");
+                    sss.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                break;
+            case "exit":
                 interactive = false;
-                System.out.println("SecStore is stopping.");
+                System.out.println("Exiting SecStore.");
                 break;
             default:
                 System.out.println("Invalid command!");

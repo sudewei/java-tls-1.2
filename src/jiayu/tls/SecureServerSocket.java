@@ -211,4 +211,8 @@ public class SecureServerSocket {
         }
     }
 
+
+    public void close() throws IOException {
+        serverSocket.close();
+    }
 }
