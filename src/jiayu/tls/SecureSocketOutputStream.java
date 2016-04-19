@@ -23,7 +23,7 @@ public class SecureSocketOutputStream extends OutputStream {
 
     @Override
     public void write(byte[] b, int off, int len) throws IOException {
-        recordLayer.putNextOutgoingMessage(new ApplicationData(Arrays.copyOfRange(b, off, off + len)));
+        write(Arrays.copyOfRange(b, off, off + len));
     }
 
     @Override

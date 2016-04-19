@@ -143,20 +143,42 @@ class DefaultRecordLayerImpl implements RecordLayer {
 
     @Override
     public void putNextOutgoingMessage(ProtocolMessage message) throws IOException {
+        byte[] bytes;
+        String encrypted;
+
+        // if a message is too long we break its contents up into multiple records
+        if (message.getContent().length > MAX_RECORD_LENGTH - 5) {
+            ByteQueue buf = new ByteQueue();
+            buf.enqueue(message.getContent());
+            while (buf.size() > MAX_RECORD_LENGTH - 5) {
+                putNextOutgoingMessage(new GenericProtocolMessage(message.getContentType(), buf.dequeue(MAX_RECORD_LENGTH - 5)));
+            }
+            putNextOutgoingMessage(new GenericProtocolMessage(message.getContentType(), buf.dequeue(buf.size())));
+            return;
+        }
+
         // no encryption
         if (writeState.getEncryptionAlgorithm() == null) {
             TLSPlaintext tlsPlaintext = new TLSPlaintext(message);
-            out.write(tlsPlaintext.getBytes());
+            bytes = tlsPlaintext.getBytes();
+            encrypted = "unencrypted";
         } else {
-            // else we need to encrypt the message before sending it
+            // we need to encrypt the message before sending it
             try {
                 GenericBlockCipher encryptedMessage = GenericBlockCipherEncryptionProvider.encrypt(writeState, message);
                 TLSCiphertext tlsCiphertext = new TLSCiphertext(encryptedMessage);
-                out.write(tlsCiphertext.getBytes());
+                bytes = tlsCiphertext.getBytes();
+                encrypted = "encrypted";
             } catch (InvalidKeyException | NoSuchAlgorithmException | BadPaddingException | InvalidAlgorithmParameterException | NoSuchPaddingException | IllegalBlockSizeException e) {
                 e.printStackTrace();
+                throw new IOException();
             }
         }
+
+
+        System.out.println(String.format("Sending %d bytes of %s %s", bytes.length, encrypted, message.getContentType().name()));
+
+        out.write(bytes);
     }
 
     @Override

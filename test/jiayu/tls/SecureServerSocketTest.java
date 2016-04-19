@@ -25,6 +25,9 @@ public class SecureServerSocketTest {
 
         buf = new byte[incDataSize];
         in.readFully(buf);
-        Files.write(Paths.get("misc/files/downloaddest/newfile.txt"), buf, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
+        Files.write(Paths.get("misc/files/downloaddest/newfile.txt"), buf,
+                StandardOpenOption.CREATE,
+                StandardOpenOption.TRUNCATE_EXISTING,
+                StandardOpenOption.WRITE);
     }
 }

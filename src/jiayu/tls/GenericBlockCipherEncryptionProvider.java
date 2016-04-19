@@ -3,7 +3,6 @@ package jiayu.tls;
 import javax.crypto.*;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
-import javax.xml.bind.DatatypeConverter;
 import java.nio.ByteBuffer;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
@@ -49,7 +48,6 @@ class GenericBlockCipherEncryptionProvider {
         // randomise the padding length up to the max length of 255
         int extraPadMultiples = (255 - minPaddingReq) / blockSize;
         int padAmount = minPaddingReq + new SecureRandom().nextInt(extraPadMultiples) * blockSize;
-        System.out.println("padding length: " + padAmount);
 
         assert padAmount < 255;
         assert (lengthBefPad + padAmount) % blockSize == 0;
@@ -61,11 +59,9 @@ class GenericBlockCipherEncryptionProvider {
 
         byte[] iv = new byte[ivLength];
         new SecureRandom().nextBytes(iv);
-        System.out.println("Encrypting using IV: " + DatatypeConverter.printHexBinary(iv));
         Cipher cipher = Cipher.getInstance(algorithm.transformation);
         cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(encKey, algorithm.keySpec), new IvParameterSpec(iv));
         byte[] ciphertext = cipher.doFinal(fragment.array());
-        System.out.println("Ciphertext: " + DatatypeConverter.printHexBinary(ciphertext));
 
         writeState.incrementSequenceNumber();
         return new GenericBlockCipher(message.getContentType(), iv, ciphertext);
@@ -90,7 +86,6 @@ class GenericBlockCipherEncryptionProvider {
                 : readState.getServerWriteMACKey();
 
         byte[] iv = Arrays.copyOf(tlsCiphertext.getContent(), ivLength);
-        System.out.println("Decrypting with IV: " + DatatypeConverter.printHexBinary(iv));
         byte[] cipherText = Arrays.copyOfRange(tlsCiphertext.getContent(), ivLength, tlsCiphertext.getContent().length);
 
         Cipher cipher = Cipher.getInstance(algorithm.transformation);
@@ -100,7 +95,6 @@ class GenericBlockCipherEncryptionProvider {
         byte[] fragment = cipher.doFinal(cipherText);
 
         int paddingLength = fragment[fragment.length - 1] & 0xFF;
-        System.out.println("padding length: " + paddingLength);
         int plaintextLength = fragment.length - paddingLength - macLength - 1;
 
         for (int i = 0; i < paddingLength; i++) {

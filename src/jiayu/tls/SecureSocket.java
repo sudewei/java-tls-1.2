@@ -255,10 +255,17 @@ public class SecureSocket {
         return out;
     }
 
-    public InputStream getInputStream() {
+    public SecureSocketInputStream getInputStream() {
         if (recordLayer == null) throw new IllegalStateException("not connected yet");
 
         if (in == null) in = new SecureSocketInputStream(recordLayer);
         return in;
+    }
+
+    public void close() throws IOException {
+        in.close();
+        out.close();
+
+        socket.close();
     }
 }

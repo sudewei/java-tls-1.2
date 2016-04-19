@@ -59,7 +59,6 @@ public class PremasterSecret {
         this.bytes = bytes;
     }
 
-
     public byte[] getBytes() {
         return bytes;
     }

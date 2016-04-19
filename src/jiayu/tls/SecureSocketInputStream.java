@@ -14,12 +14,15 @@ public class SecureSocketInputStream extends InputStream {
 
     @Override
     public int read() throws IOException {
-        try {
-            return recordLayer.getNextIncomingMessage().asApplicationData().getContent()[0] & 0xFF;
-        } catch (FatalAlertException e) {
-            e.printStackTrace();
-            throw new IOException();
+        if (byteQueue.isEmpty()) {
+            try {
+                byteQueue.enqueue(recordLayer.getNextIncomingMessage().getContent());
+            } catch (FatalAlertException e) {
+                e.printStackTrace();
+                throw new IOException();
+            }
         }
+        return byteQueue.dequeue();
     }
 
     @Override

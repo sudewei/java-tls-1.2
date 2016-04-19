@@ -1,86 +1,92 @@
 package jiayu.tls.filetransfer;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.channels.Channels;
-import java.nio.channels.ReadableByteChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 
 public class Metadata {
+    private static final int SHA_256_BYTES = 32;
 
-    private static final int SIZEOF_MD5 = 16;
+    private final String filename;
+    private final int filesize;
+    private final byte[] checksum;
 
-    private String name;
-    private StringBuffer nameBuf;
-    private long size;
-    private Checksum md5;
+    private final int length;
 
-    private Metadata(Path file) throws IOException {
-        name = file.getFileName().toString();
-        size = Files.size(file);
-        md5 = Checksum.getMD5Checksum(file);
+    public Metadata(String filename, byte[] content) {
+        this(filename,
+                content.length,
+                calculateChecksum(content));
     }
 
-    private Metadata(String name, long size, Checksum md5) {
-        this.name = name;
-        this.size = size;
-        this.md5 = md5;
+    private Metadata(Path file) throws IOException {
+        this(file.getFileName().toString(),
+                (int) Files.size(file),
+                calculateChecksum(file));
+    }
+
+    private Metadata(String filename, int filesize, byte[] checksum) {
+        this.filename = filename;
+        this.filesize = filesize;
+        this.checksum = checksum;
+
+        length = Integer.BYTES + filename.length() + Integer.BYTES + SHA_256_BYTES;
     }
 
     public static Metadata get(Path file) throws IOException {
         return new Metadata(file);
     }
 
-    /**
-     * Reads file metadata write an a ReadableByteChannel (usually a SocketChannel)
-     *
-     * @param src Channel to read file metadata write
-     * @return A new Metadata instance
-     * @throws IOException If an I/O error occurs
-     */
-    public static Metadata readFrom(ReadableByteChannel src) throws IOException {
-        ByteBuffer buf = ByteBuffer.allocate(SIZEOF_MD5 + Long.BYTES + Integer.BYTES);
-        src.read(buf);
-        buf.flip();
-
-        byte[] md5Bytes = new byte[SIZEOF_MD5];
-        buf.get(md5Bytes);
-        Checksum md5 = Checksum.wrap(md5Bytes);
-
-        long size = buf.getLong();
-
-        ByteBuffer nameBuf = ByteBuffer.allocate(buf.getInt());
-        src.read(nameBuf);
-        String name = new String(nameBuf.array());
-
-        return new Metadata(name, size, md5);
+    public String getFilename() {
+        return filename;
     }
 
-    public ReadableByteChannel toReadableByteChannel() {
-        int length = SIZEOF_MD5 + Integer.BYTES + Long.BYTES + name.length();
-        return Channels.newChannel(
-                new ByteArrayInputStream(
-                        ByteBuffer.allocate(length)
-                                .put(md5.getBytes())
-                                .putLong(size)
-                                .putInt(name.length())
-                                .put(name.getBytes())
-                                .array()
-                )
-        );
+    public int getFilesize() {
+        return filesize;
     }
 
-    public String getFileName() {
-        return name;
+    public byte[] getChecksum() {
+        return checksum;
     }
 
-    public long getSize() {
-        return size;
+    public byte[] getBytes() {
+        return ByteBuffer.allocate(Integer.BYTES + length)
+                .putInt(length)
+                .putInt(filename.length())
+                .put(filename.getBytes())
+                .putInt(filesize)
+                .put(checksum)
+                .array();
     }
 
-    public Checksum getMD5Hash() {
-        return md5;
+    public static Metadata fromBytes(byte[] bytes) {
+        ByteBuffer buf = ByteBuffer.wrap(bytes);
+        int filenameLength = buf.getInt();
+        byte[] filenameBytes = new byte[filenameLength];
+        buf.get(filenameBytes);
+        String filename = new String(filenameBytes);
+        int filesize = buf.getInt();
+        byte[] checksum = new byte[SHA_256_BYTES];
+        buf.get(checksum);
+
+        return new Metadata(filename, filesize, checksum);
+    }
+
+    public static byte[] calculateChecksum(byte[] bytes) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            return md.digest(bytes);
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+            throw new RuntimeException();
+        }
+
+    }
+
+    public static byte[] calculateChecksum(Path file) throws IOException {
+        return calculateChecksum(Files.readAllBytes(file));
     }
 }

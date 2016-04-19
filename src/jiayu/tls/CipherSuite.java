@@ -12,7 +12,7 @@ import static jiayu.tls.PRFAlgorithm.TLS_PRF_SHA256;
 
 public enum CipherSuite {
     TLS_NULL_WITH_NULL_NULL(0x0000, null, null, null, null),
-    TLS_RSA_WITH_AES_128_CBC_SHA256(0x002F, TLS_PRF_SHA256, RSA, AES_128_CBC, HMAC_SHA256);
+    TLS_RSA_WITH_AES_128_CBC_SHA256(0x003C, TLS_PRF_SHA256, RSA, AES_128_CBC, HMAC_SHA256);
 
     public static final int BYTES = 2;
 
