@@ -229,6 +229,10 @@ public class SecStore {
             case "bind":
                 int port;
                 try {
+                    if (args[0] == null) {
+                        System.out.println("invalid arguments!");
+                        return;
+                    }
                     port = Integer.parseInt(args[0]);
                     bind(port);
                     System.out.println("Successfully bound to port " + port);
@@ -271,6 +275,10 @@ public class SecStore {
             case "servercert":
                 try {
                     setServerCert(Paths.get(args[1]));
+                    if (args[1] == null) {
+                        System.out.println("invalid arguments!");
+                        return;
+                    }
                     System.out.println("New server cert set.");
                 } catch (IOException e) {
                     System.out.println("ERROR");
@@ -279,6 +287,11 @@ public class SecStore {
                 break;
             case "serverkey":
                 try {
+                    if (args[1] == null) {
+                        System.out.println("invalid arguments!");
+                        return;
+                    }
+
                     setServerKey(Paths.get(args[1]));
                     System.out.println("New server key set.");
                 } catch (InvalidKeySpecException | NoSuchAlgorithmException | IOException e) {
@@ -288,6 +301,10 @@ public class SecStore {
                 break;
             case "destdir":
                 setDestDir(Paths.get(args[1]));
+                if (args[1] == null) {
+                    System.out.println("invalid arguments!");
+                    return;
+                }
                 System.out.println("New destination directory set.");
                 break;
             default:
