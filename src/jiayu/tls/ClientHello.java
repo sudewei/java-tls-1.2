@@ -119,9 +119,6 @@ public class ClientHello extends HandshakeMessage {
         if (handshake.getType() != HandshakeType.CLIENT_HELLO)
             throw new FatalAlertException(AlertDescription.UNEXPECTED_MESSAGE);
 
-        int length = handshake.getLength();
-        System.out.println(DatatypeConverter.printHexBinary(handshake.getContent()));
-
         ByteBuffer content = ByteBuffer.wrap(handshake.getContent());
 
         short clientVersion = content.getShort();                           // get 2 content
@@ -152,11 +149,10 @@ public class ClientHello extends HandshakeMessage {
 
     @Override
     public String toString() {
-
-        return String.format("client_version: %s", Integer.toHexString(clientVersion)) +
-                String.format("random: %s", Arrays.toString(random.toBytes())) +
-                String.format("session_id: %d", sessionId.getValue()) +
-                String.format("cipher_suites: %s", Arrays.toString(cipherSuites)) +
-                String.format("compression_methods: %s", Arrays.toString(compressionMethods));
+        return String.format("    client_version: %s", Integer.toHexString(clientVersion)) +
+                String.format("%n    random: %s", DatatypeConverter.printBase64Binary(random.toBytes())) +
+                String.format("%n    session_id: %d", sessionId.getValue()) +
+                String.format("%n    cipher_suites: %s", Arrays.toString(cipherSuites)) +
+                String.format("%n    compression_methods: %s", Arrays.toString(compressionMethods));
     }
 }

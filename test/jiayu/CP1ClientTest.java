@@ -7,7 +7,7 @@ public class CP1ClientTest {
     public void uploadFile() throws Exception {
         SecStoreClient client = SecStoreClient.getInstance("CP1");
         client.connect("localhost", 4443);
-        if (client.uploadFile("misc/files/10MB")) {
+        if (client.uploadFile("misc/files/1MB")) {
             System.out.println("Upload success!");
         } else {
             System.out.println("Upload failed.");

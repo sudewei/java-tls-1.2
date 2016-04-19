@@ -3,6 +3,7 @@ package jiayu;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.security.NoSuchAlgorithmException;
+import java.security.cert.CertificateException;
 
 public interface SecStoreClient {
     static SecStoreClient getInstance(String cp) throws NoSuchAlgorithmException {
@@ -15,6 +16,8 @@ public interface SecStoreClient {
                 throw new NoSuchAlgorithmException();
         }
     }
+
+    void addCACert(Path caCert) throws CertificateException, IOException;
 
     void connect(String host, int port) throws IOException;
 

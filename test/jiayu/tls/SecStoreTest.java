@@ -35,11 +35,6 @@ public class SecStoreTest {
         store.listen();
     }
 
-    private static int bytesToInt(byte[] bytes) {
-        assert bytes.length == Integer.BYTES;
-        return ByteBuffer.wrap(bytes).getInt();
-    }
-
     private void handle(SecureSocket ss) throws IOException {
         SecureSocketInputStream in = ss.getInputStream();
         OutputStream out = ss.getOutputStream();
@@ -59,11 +54,13 @@ public class SecStoreTest {
 
         incSizeBuf.rewind();
         in.readFully(incSizeBuf.array());
-        int numBlocks = incSizeBuf.getInt();
+        int incSize = incSizeBuf.getInt();
 
-        for (int i = 0; i < numBlocks; i++) {
+        int bytesRead = 0;
+        while (bytesRead < incSize) {
             byte[] block = new byte[128];
             in.readFully(block);
+            bytesRead += 128;
             ciphertext.add(block);
         }
 
@@ -80,6 +77,7 @@ public class SecStoreTest {
             throw new IOException();
         }
 
+        long startTime = System.currentTimeMillis();
         for (byte[] bytes : ciphertext) {
             try {
                 plaintext.add(cipher.doFinal(bytes));
@@ -88,6 +86,8 @@ public class SecStoreTest {
                 throw new IOException();
             }
         }
+        long endTime = System.currentTimeMillis();
+        System.out.println("Decryption time: " + (endTime - startTime));
 
         // reassemble content
         ByteArrayOutputStream content = new ByteArrayOutputStream();
@@ -124,5 +124,13 @@ public class SecStoreTest {
         SecStore store = new SecStore();
         store.bind(4443);
         store.listen(this::handle);
+    }
+
+    @Test
+    public void testGenericReceiveFile() throws Exception {
+        SecStore store = new SecStore();
+        store.setDestDir(Paths.get("misc/files/downloaddest"));
+        store.bind(4443);
+        store.listen(store::receiveFile);
     }
 }

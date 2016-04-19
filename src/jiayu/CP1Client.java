@@ -12,29 +12,28 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.*;
+import java.security.cert.CertificateException;
 import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
+@SuppressWarnings("ALL")
 public class CP1Client extends AbstractSecStoreClient {
     public static void main(String[] args) {
         try {
             SecStoreClient client = SecStoreClient.getInstance("CP1");
+            client.addCACert(Paths.get("C:\\Users\\jiayu\\IdeaProjects\\tls-1.2-implementation-java\\misc\\certs\\servercert.crt"));
             client.connect("localhost", 4443);
-            if (client.uploadFile("C:\\Users\\jiayu\\IdeaProjects\\tls-1.2-implementation-java\\misc\\files\\1MB")) {
+            boolean b = client.uploadFile("C:\\Users\\jiayu\\IdeaProjects\\tls-1.2-implementation-java\\misc\\files\\1MB");
+            if (b) {
                 System.out.println("Upload success!");
             } else {
                 System.out.println("Upload failed.");
             }
-        } catch (NoSuchAlgorithmException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
+        } catch (NoSuchAlgorithmException | IOException | CertificateException e) {
             e.printStackTrace();
         }
-    }
-
-    public CP1Client() {
-        super();
     }
 
     @Override
@@ -43,11 +42,11 @@ public class CP1Client extends AbstractSecStoreClient {
         Metadata metadata = Metadata.get(file);
         byte[] plaintext = Files.readAllBytes(file);
 
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        baos.write(metadata.getBytes());
-        baos.write(plaintext);
+        ByteArrayOutputStream toEncrypt = new ByteArrayOutputStream();
+        toEncrypt.write(metadata.getBytes());
+        toEncrypt.write(plaintext);
 
-        ByteBuffer buf = ByteBuffer.wrap(baos.toByteArray());
+        ByteBuffer buf = ByteBuffer.wrap(toEncrypt.toByteArray());
 
         ArrayList<byte[]> plaintextBlocks = new ArrayList<>();
         while (buf.remaining() > 117) {
@@ -75,35 +74,75 @@ public class CP1Client extends AbstractSecStoreClient {
         Object[] plaintextBlocksArray = plaintextBlocks.toArray();
         byte[][] ciphertextBlocksArray = new byte[plaintextBlocksArray.length][];
 
-        System.out.println("encrypting data...");
+        System.out.println("Encrypting data...");
+        System.out.printf("  0%% |                                        |");
+        long startTime = System.currentTimeMillis();
 
-        encrypt(privateKey, plaintextBlocksArray, ciphertextBlocksArray, 4);
-        System.out.println("finished encrypting");
+        // parallel
+        encryptParallel(privateKey, plaintextBlocksArray, ciphertextBlocksArray, 4);
+
+        // sequential
+//        encryptSequential(privateKey, plaintextBlocksArray, ciphertextBlocksArray);
+
+        long endTime = System.currentTimeMillis();
+
+        System.out.println();
+        System.out.println("Encryption time: " + (endTime - startTime));
 
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         byte[] pubKeyBytes = publicKey.getEncoded();
 
+        output.write(1);
         output.write(UInt.itob(pubKeyBytes.length));
         output.write(pubKeyBytes);
 
-        output.write(UInt.itob(plaintextBlocks.size()));
+        int dataLength = 0;
+        for (byte[] bytes : ciphertextBlocksArray) dataLength += bytes.length;
 
-        for (byte[] bytes : ciphertextBlocksArray) {
-            output.write(bytes);
-        }
+        output.write(UInt.itob(dataLength));
 
+        for (byte[] bytes : ciphertextBlocksArray) output.write(bytes);
+
+        System.out.println("Sending data to server...");
         out.write(output.toByteArray());
+        System.out.println("Waiting for server response");
         return in.read() == 1;
     }
 
-    private void encrypt(Key privateKey, Object[] src, byte[][] dst, int numThreads) {
+    private void encryptSequential(Key privateKey, Object[] src, byte[][] dst) {
+        try {
+            Cipher cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
+            cipher.init(Cipher.ENCRYPT_MODE, privateKey);
+            for (int i = 0; i < src.length; i++) {
+                dst[i] = cipher.doFinal((byte[]) src[i]);
+            }
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+            throw new RuntimeException();
+        } catch (NoSuchPaddingException e) {
+            e.printStackTrace();
+            throw new RuntimeException();
+        } catch (IllegalBlockSizeException e) {
+            e.printStackTrace();
+            throw new RuntimeException();
+        } catch (BadPaddingException e) {
+            e.printStackTrace();
+            throw new RuntimeException();
+        } catch (InvalidKeyException e) {
+            e.printStackTrace();
+            throw new RuntimeException();
+        }
+    }
+
+    private void encryptParallel(Key privateKey, Object[] src, byte[][] dst, int numThreads) {
         final int numBlocks = src.length;
         final int step = numBlocks / 100;
         final AtomicInteger counter = new AtomicInteger(0);
+        final AtomicInteger runningCount = new AtomicInteger(0);
 
         Thread[] threads = new Thread[numThreads];
         for (int i = 0; i < numThreads; i++) {
-            threads[i] = new Thread(new EncryptionWorker(privateKey, src, dst, numThreads, i, counter));
+            threads[i] = new Thread(new EncryptionWorker(privateKey, src, dst, numThreads, i, counter, runningCount));
             threads[i].start();
         }
         for (Thread thread : threads) {
@@ -123,18 +162,22 @@ public class CP1Client extends AbstractSecStoreClient {
         final int numThreads;
         final int index;
         final AtomicInteger counter;
-        final int step;
+        final AtomicInteger runningCount;
 
+        final int step;
         final Cipher cipher;
 
-        EncryptionWorker(Key privateKey, Object[] src, byte[][] dst, int numThreads, int index, AtomicInteger counter) {
+        EncryptionWorker(Key privateKey, Object[] src, byte[][] dst, int numThreads, int index,
+                         AtomicInteger counter, AtomicInteger runningCount) {
             this.privateKey = privateKey;
             this.src = src;
             this.dst = dst;
             this.numThreads = numThreads;
             this.index = index;
             this.counter = counter;
-            step = src.length / 10;
+            this.runningCount = runningCount;
+
+            step = src.length / 20;
 
             try {
                 this.cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
@@ -153,9 +196,9 @@ public class CP1Client extends AbstractSecStoreClient {
                     dst[current] = cipher.doFinal((byte[]) src[current]);
                     counter.getAndIncrement();
                     if (counter.compareAndSet(step, 0)) {
-                        System.out.printf("=");
+                        int progress = runningCount.incrementAndGet();
+                        System.out.printf("\r%3d%% |%s%s|", progress * 5, new String(new char[progress]).replace("\0", "=="), new String(new char[20 - progress]).replace("\0", "  "));
                     }
-
                 } catch (InvalidKeyException | IllegalBlockSizeException | BadPaddingException e) {
                     e.printStackTrace();
                     throw new RuntimeException();

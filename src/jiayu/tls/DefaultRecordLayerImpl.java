@@ -176,7 +176,7 @@ class DefaultRecordLayerImpl implements RecordLayer {
         }
 
 
-        System.out.println(String.format("Sending %d bytes of %s %s", bytes.length, encrypted, message.getContentType().name()));
+//        System.out.println(String.format("Sending %d bytes of %s %s", bytes.length, encrypted, message.getContentType().name()));
 
         out.write(bytes);
     }

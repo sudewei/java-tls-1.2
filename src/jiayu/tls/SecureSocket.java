@@ -4,7 +4,10 @@ import javax.crypto.BadPaddingException;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
 import javax.xml.bind.DatatypeConverter;
-import java.io.*;
+import java.io.ByteArrayInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -14,6 +17,7 @@ import java.security.cert.CertificateExpiredException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
+import java.util.HashSet;
 
 @SuppressWarnings("Duplicates")
 public class SecureSocket {
@@ -26,7 +30,7 @@ public class SecureSocket {
     SecureSocketInputStream in;
     SecureSocketOutputStream out;
 
-    private X509Certificate caCert;
+    private HashSet<X509Certificate> caCerts;
 
     SecureSocket(RecordLayer recordLayer) {
         this.recordLayer = recordLayer;
@@ -36,30 +40,41 @@ public class SecureSocket {
     }
 
     public SecureSocket(String host, int port, Path caCert) throws IOException, CertificateException {
-        setCACertificate(caCert);
+        addCACertificate(caCert);
         connectSecured(host, port);
     }
 
-    public void setCACertificate(Path caCert) throws IOException, CertificateException {
+    public void addCACertificate(X509Certificate caCert) {
+        if (caCerts == null) caCerts = new HashSet<>();
+
+        caCerts.add(caCert);
+    }
+
+    public void addCACertificate(Path caCert) throws IOException, CertificateException {
         if (!Files.exists(caCert)) throw new FileNotFoundException();
         if (!Files.isRegularFile(caCert)) throw new IllegalArgumentException();
 
-        this.caCert = (X509Certificate) CertificateFactory.getInstance("X.509")
-                .generateCertificate(Files.newInputStream(caCert));
+        if (caCerts == null) caCerts = new HashSet<>();
+
+        caCerts.add((X509Certificate) CertificateFactory.getInstance("X.509")
+                .generateCertificate(Files.newInputStream(caCert)));
     }
 
     public void connectSecured(String host, int port) throws IOException {
-        if (caCert == null) throw new IllegalStateException("no CA cert specified");
+        if (caCerts == null || caCerts.isEmpty()) throw new IllegalStateException("no CA certs specified");
 
         socket = new Socket(host, port);
 
         SecurityParameters currSecParams = new SecurityParameters(ConnectionEnd.CLIENT);
+
         ConnectionState currReadState = new ConnectionState();
         ConnectionState currWriteState = new ConnectionState();
 
         try {
+            System.out.println("Initialising current read and write states...");
             currReadState.init(currSecParams);
             currWriteState.init(currSecParams);
+        System.out.println("Current cipher suite: " + currSecParams.getCipherSuite().name());
         } catch (NoSuchAlgorithmException | InvalidKeyException e) {
             e.printStackTrace();
         }
@@ -71,39 +86,33 @@ public class SecureSocket {
         ConnectionState pendingWriteState = new ConnectionState();
 
         // send client hello
-        System.out.print("Sending client hello... ");
-        System.out.flush();
+        System.out.println("Sending ClientHello... ");
         ClientHello clientHello = new ClientHello(SUPPORTED_CIPHER_SUITES);
         recordLayer.putNextOutgoingMessage(clientHello);
-        System.out.println("Done.");
 
         securityParameters.setClientRandom(clientHello.getRandom().toBytes());
 
         // receive server hello
-        System.out.print("Waiting for ServerHello... ");
-        System.out.flush();
+        System.out.println("Waiting for ServerHello... ");
         try {
             ServerHello serverHello = (ServerHello) recordLayer.getNextIncomingMessage()
                     .asHandshakeMessage(HandshakeType.SERVER_HELLO);
-            System.out.println("Received.");
 
             securityParameters.setCipherSuite(serverHello.getCipherSuite());
             securityParameters.setServerRandom(serverHello.getRandom().toBytes());
 
             // receive server certificate
-            System.out.print("Waiting for Certificate... ");
+            System.out.println("Waiting for server Certificate... ");
             System.out.flush();
             Certificate certificate = (Certificate) recordLayer.getNextIncomingMessage()
                     .asHandshakeMessage(HandshakeType.CERTIFICATE);
-            System.out.println("Received.");
 
 
             // wait for serverhellodone
-            System.out.print("Waiting for ServerHelloDone... ");
+            System.out.println("Waiting for ServerHelloDone... ");
             System.out.flush();
             ServerHelloDone serverHelloDone = (ServerHelloDone) recordLayer.getNextIncomingMessage()
                     .asHandshakeMessage(HandshakeType.SERVER_HELLO_DONE);
-            System.out.println("Received.");
 
             // authenticate server certificate
             // FIXME: 15/04/2016 authenticates each cert individually instead of as a chain
@@ -117,6 +126,7 @@ public class SecureSocket {
             PublicKey serverPublicKey;
             System.out.println("Authenticating server certificates... ");
             CertificateList certChain = certificate.getCertificateList();
+            if (certChain.getContents().isEmpty()) throw new FatalAlertException(AlertDescription.BAD_CERTIFICATE);
             X509Certificate serverCert = null;
             X509Certificate prev = null;
             X509Certificate current;
@@ -132,10 +142,20 @@ public class SecureSocket {
                         System.out.println("Current DN: " + current.getSubjectX500Principal().getName());
                         current.checkValidity();
                         prev.verify(current.getPublicKey());
+                        prev = current;
                     }
                 }
                 assert prev != null;
-                prev.verify(caCert.getPublicKey());
+                boolean verified = false;
+                for (X509Certificate caCert : caCerts) {
+                    try {
+                        prev.verify(caCert.getPublicKey());
+                        verified = true;
+                        break;
+                    } catch (CertificateException | NoSuchAlgorithmException | InvalidKeyException | SignatureException | NoSuchProviderException ignored) {
+                    }
+                }
+                if (!verified) throw new FatalAlertException(AlertDescription.BAD_CERTIFICATE);
                 serverPublicKey = serverCert.getPublicKey();
                 System.out.println("Authenticated.");
 
@@ -148,31 +168,31 @@ public class SecureSocket {
             }
 
             // generate and send pre-master key
+            System.out.println("Generating premaster secret...");
             CipherSuite selectedCipherSuite = serverHello.getCipherSuite();
             PremasterSecret premasterSecret;
             ClientKeyExchange clientKeyExchange;
             if (selectedCipherSuite.keyExchangeAlgorithm == KeyExchangeAlgorithm.RSA) {
                 premasterSecret = PremasterSecret.newRSAPremasterSecret(CLIENT_VERSION);
+                System.out.println("Premaster secret: " + DatatypeConverter.printBase64Binary(premasterSecret.getBytes()));
                 try {
                     clientKeyExchange = new ClientKeyExchange(premasterSecret.getEncryptedBytes(serverPublicKey));
                 } catch (BadPaddingException | IllegalBlockSizeException | InvalidKeyException | NoSuchAlgorithmException | NoSuchPaddingException e) {
                     throw new FatalAlertException(AlertDescription.INTERNAL_ERROR);
                 }
+                System.out.println("Sending ClientKeyExchange...");
                 recordLayer.putNextOutgoingMessage(clientKeyExchange);
-                System.out.println("Done.");
-                System.out.println("Unencypted premaster secret: " + Arrays.toString(premasterSecret.getBytes()));
-                System.out.println("Premaster secret length: " + premasterSecret.getBytes().length);
             } else {
                 throw new FatalAlertException(AlertDescription.INTERNAL_ERROR);
             }
 
             // generate master secret
             MasterSecret masterSecret;
+            System.out.println("Generating master secret...");
             //noinspection Duplicates
             try {
                 masterSecret = MasterSecret.generateMasterSecret(premasterSecret, clientHello, serverHello);
-                System.out.println("Master secret: " + Arrays.toString(masterSecret.getBytes()));
-                System.out.println("Master secret length: " + masterSecret.getBytes().length);
+                System.out.println("Master secret: " + DatatypeConverter.printBase64Binary(masterSecret.getBytes()));
             } catch (InvalidKeyException | NoSuchAlgorithmException e) {
                 throw new FatalAlertException(AlertDescription.INTERNAL_ERROR);
             }
@@ -182,8 +202,10 @@ public class SecureSocket {
             // now that all the security parameters have been established
             // initialise the next read and write states
             try {
+                System.out.println("Initialising pending read and write states...");
                 pendingWriteState.init(securityParameters);
                 pendingReadState.init(securityParameters);
+                System.out.println("Pending cipher suite: " + securityParameters.getCipherSuite().name());
             } catch (NoSuchAlgorithmException | InvalidKeyException e) {
                 e.printStackTrace();
                 throw new FatalAlertException(AlertDescription.INTERNAL_ERROR);
@@ -195,21 +217,21 @@ public class SecureSocket {
                 record layer to make the write pending state the write active state.
              */
             ChangeCipherSpecMessage changeCipherSpec = new ChangeCipherSpecMessage();
+            System.out.println("Sending client ChangeCipherSpec...");
             recordLayer.putNextOutgoingMessage(changeCipherSpec);
-
+            System.out.println("Made pending write state current.");
             // make the pending write state the current write state
             recordLayer.updateWriteState(pendingWriteState);
             currWriteState = pendingWriteState;
 
             // create client Finished message
+            System.out.println("Generating client Finished...");
             Finished clientFinished = Finished.createClientFinishedMessage(masterSecret,
                     clientHello, serverHello, certificate, serverHelloDone, clientKeyExchange);
-            System.out.println("client finished generated by client: " + DatatypeConverter.printHexBinary(clientFinished.getContent()));
 
             // since we have updated the recordLayer's write state, it should encrypt this for us
             System.out.println("Sending client Finished...");
             recordLayer.putNextOutgoingMessage(clientFinished);
-            System.out.println("Sent client Finished.");
 
             // receive server ChangeCipherSpec message
             /*
@@ -219,8 +241,7 @@ public class SecureSocket {
              */
             System.out.println("Waiting for server ChangeCipherSpec...");
             recordLayer.getNextIncomingMessage().asChangeCipherSpecMessage();
-            System.out.println("Received server ChangeCipherSpec");
-
+            System.out.println("Made pending read state current.");
             // make the pending read state the current read state
             recordLayer.updateReadState(pendingReadState);
             currReadState = pendingReadState;
@@ -228,7 +249,6 @@ public class SecureSocket {
             // receive server Finished message
             System.out.println("Waiting for server Finished...");
             Finished serverFinished = (Finished) recordLayer.getNextIncomingMessage().asHandshakeMessage(HandshakeType.FINISHED);
-            System.out.println("Received server Finished.");
 
             // verify server Finished message
             System.out.println("Verifying server Finished...");
@@ -236,9 +256,8 @@ public class SecureSocket {
                     clientHello, serverHello, certificate, serverHelloDone, clientKeyExchange, clientFinished);
             if (!Arrays.equals(serverFinished.getContent(), serverFinishedVerify.getContent()))
                 throw new FatalAlertException(AlertDescription.DECRYPT_ERROR);
-            System.out.println("Verified server Finished.");
 
-            System.out.println("Handshake completed.");
+            System.out.println("Handshake complete.");
 
             this.recordLayer = recordLayer;
         } catch (FatalAlertException e) {

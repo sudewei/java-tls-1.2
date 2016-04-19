@@ -11,7 +11,7 @@ public class SecureSocketTest {
     @Test
     public void connectSecured() throws Exception {
         SecureSocket secureSocket = new SecureSocket();
-        secureSocket.setCACertificate(Paths.get("misc/certs/servercert.crt"));
+        secureSocket.addCACertificate(Paths.get("misc/certs/servercert.crt"));
         secureSocket.connectSecured("localhost", 4443);
 
         byte[] largeTxt = Files.readAllBytes(Paths.get("misc/files/largeSize.txt"));

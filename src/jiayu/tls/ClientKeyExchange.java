@@ -17,8 +17,6 @@ public class ClientKeyExchange extends HandshakeMessage {
 
         this.encryptedPremasterSecret = encryptedPremasterSecret;
 
-        System.out.println("encrypted premaster length: " + encryptedPremasterSecret.length);
-
         length = encryptedPremasterSecret.length;
         header = createHeader(length);
     }
