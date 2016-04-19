@@ -40,15 +40,7 @@ public class SecStore {
 
     public SecStore() throws IOException {
         listening = false;
-
         sss = new SecureServerSocket();
-        sss.setServerCert(Paths.get("misc/certs/servercert.crt"));
-        try {
-            sss.setServerKey(Paths.get("misc/certs/serverkey.der"));
-        } catch (InvalidKeySpecException | NoSuchAlgorithmException e) {
-            e.printStackTrace();
-            throw new RuntimeException();
-        }
     }
 
     public void setServerCert(Path serverCert) throws IOException {
