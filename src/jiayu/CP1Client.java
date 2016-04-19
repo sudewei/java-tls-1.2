@@ -40,6 +40,8 @@ public class CP1Client extends AbstractSecStoreClient {
     public boolean uploadFile(Path file) throws IOException {
         // prepare the data by RSA encrypting it in 117 byte chunks
         Metadata metadata = Metadata.get(file);
+        System.out.println(String.format("Uploading %s (%d bytes)", metadata.getFilename(), metadata.getFilesize()));
+
         byte[] plaintext = Files.readAllBytes(file);
 
         ByteArrayOutputStream toEncrypt = new ByteArrayOutputStream();

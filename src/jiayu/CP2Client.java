@@ -17,10 +17,10 @@ import java.security.cert.CertificateException;
 public class CP2Client extends AbstractSecStoreClient {
     public static void main(String[] args) {
         try {
-            SecStoreClient client = SecStoreClient.getInstance("CP1");
+            SecStoreClient client = SecStoreClient.getInstance("CP2");
             client.addCACert(Paths.get("C:\\Users\\jiayu\\IdeaProjects\\tls-1.2-implementation-java\\misc\\certs\\servercert.crt"));
             client.connect("localhost", 4443);
-            boolean b = client.uploadFile("C:\\Users\\jiayu\\IdeaProjects\\tls-1.2-implementation-java\\misc\\files\\1MB");
+            boolean b = client.uploadFile("misc/files/1MB");
             if (b) {
                 System.out.println("Upload success!");
             } else {
@@ -34,6 +34,8 @@ public class CP2Client extends AbstractSecStoreClient {
     @Override
     public boolean uploadFile(Path file) throws IOException {
         Metadata metadata = Metadata.get(file);
+
+        System.out.println(String.format("Uploading %s (%d bytes)", metadata.getFilename(), metadata.getFilesize()));
         byte[] fileContent = Files.readAllBytes(file);
 
         ByteArrayOutputStream toSend = new ByteArrayOutputStream();
@@ -64,6 +66,7 @@ public class CP2Client extends AbstractSecStoreClient {
             long endTime = System.currentTimeMillis();
             System.out.println("Encryption time: " + (endTime - startTime));
 
+            toSend.write(UInt.itob(encrypted.length));
             toSend.write(encrypted);
         } catch (NoSuchAlgorithmException | NoSuchPaddingException | InvalidKeyException | IllegalBlockSizeException | BadPaddingException e) {
             e.printStackTrace();

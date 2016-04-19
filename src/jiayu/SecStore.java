@@ -26,6 +26,7 @@ import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Scanner;
 
 public class SecStore {
     private static final int CP1 = 1;
@@ -34,7 +35,12 @@ public class SecStore {
     private Path destDir;
     private SecureServerSocket sss;
 
+    private boolean listening;
+    private boolean interactive;
+
     public SecStore() throws IOException {
+        listening = false;
+
         sss = new SecureServerSocket();
         sss.setServerCert(Paths.get("misc/certs/servercert.crt"));
         try {
@@ -43,6 +49,14 @@ public class SecStore {
             e.printStackTrace();
             throw new RuntimeException();
         }
+    }
+
+    public void setServerCert(Path serverCert) throws IOException {
+        sss.setServerCert(serverCert);
+    }
+
+    public void setServerKey(Path serverKey) throws InvalidKeySpecException, NoSuchAlgorithmException, IOException {
+        sss.setServerKey(serverKey);
     }
 
     public void setDestDir(Path path) {
@@ -58,7 +72,10 @@ public class SecStore {
     }
 
     public void listen(Handler handler) throws IOException {
-        handler.handle(sss.acceptSecured());
+        listening = true;
+        while (listening) {
+            handler.handle(sss.acceptSecured());
+        }
     }
 
     public void receiveBytes(byte[] bytes) {
@@ -93,22 +110,7 @@ public class SecStore {
                 content = decryptCP1(in, keyBytes, dataLength);
                 break;
             case CP2:
-
-                buf = ByteBuffer.allocate(Integer.BYTES);
-                in.readFully(buf.array());
-                int ciphertextLength = buf.getInt();
-
-                byte[] toDecrypt = new byte[ciphertextLength];
-
-                SecretKeySpec sks = new SecretKeySpec(keyBytes, "AES");
-                try {
-                    Cipher cipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
-                    cipher.init(Cipher.DECRYPT_MODE, sks);
-                    content = cipher.doFinal(toDecrypt);
-                } catch (NoSuchAlgorithmException | NoSuchPaddingException | IllegalBlockSizeException | InvalidKeyException | BadPaddingException e) {
-                    e.printStackTrace();
-                    throw new RuntimeException();
-                }
+                content = decryptCP2(in, keyBytes, dataLength);
                 break;
             default:
                 throw new IllegalStateException();
@@ -121,6 +123,7 @@ public class SecStore {
         buf.get(metadataBytes);
 
         Metadata metadata = Metadata.fromBytes(metadataBytes);
+        System.out.println(String.format("Receiving %s (%d bytes)", metadata.getFilename(), metadata.getFilesize()));
 
         byte[] fileBytes = new byte[metadata.getFilesize()];
         assert buf.remaining() == fileBytes.length;
@@ -131,6 +134,7 @@ public class SecStore {
             throw new IOException();
         } else System.out.println("File verified.");
 
+
         String filename = metadata.getFilename();
         Path destDir = Paths.get("misc/files/downloaddest");
 
@@ -138,6 +142,24 @@ public class SecStore {
 
         out.write(1);
         out.flush();
+    }
+
+    private byte[] decryptCP2(SecureSocketInputStream in, byte[] keyBytes, int dataLength) throws IOException {
+        byte[] content;
+
+        byte[] toDecrypt = new byte[dataLength];
+        in.readFully(toDecrypt);
+
+        SecretKeySpec sks = new SecretKeySpec(keyBytes, "AES");
+        try {
+            Cipher cipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
+            cipher.init(Cipher.DECRYPT_MODE, sks);
+            content = cipher.doFinal(toDecrypt);
+        } catch (NoSuchAlgorithmException | NoSuchPaddingException | IllegalBlockSizeException | InvalidKeyException | BadPaddingException e) {
+            e.printStackTrace();
+            throw new RuntimeException();
+        }
+        return content;
     }
 
     private static byte[] decryptCP1(SecureSocketInputStream in, byte[] keyBytes, int dataLength) throws IOException {
@@ -183,5 +205,100 @@ public class SecStore {
     @FunctionalInterface
     public interface Handler {
         void handle(SecureSocket ss) throws IOException;
+    }
+
+    private void startInteractiveMode() {
+        Scanner scanner = new Scanner(System.in);
+        interactive = true;
+        while (interactive) {
+            System.out.print("SecStore > ");
+            String input = scanner.nextLine();
+            parse(input);
+        }
+    }
+
+    private void parse(String input) {
+        String[] tokens = input.split(" ");
+
+        String command = tokens[0];
+        String[] args = Arrays.copyOfRange(tokens, 1, tokens.length);
+
+        execute(command, args);
+    }
+
+    private void execute(String command, String... args) {
+        switch (command) {
+            case "set":
+                set(args);
+                break;
+            case "bind":
+                int port;
+                try {
+                    port = Integer.parseInt(args[0]);
+                    bind(port);
+                    System.out.println("Successfully bound to port " + port);
+                } catch (NumberFormatException e) {
+                    System.out.println("Invalid port number!");
+                } catch (IOException e) {
+                    System.out.println("ERROR");
+                    e.printStackTrace();
+                }
+                break;
+            case "listen":
+                try {
+                    System.out.println("Server listening...");
+                    listen(this::receiveFile);
+                } catch (IOException e) {
+                    System.out.println("ERROR");
+                    e.printStackTrace();
+                }
+                break;
+            case "stop":
+                interactive = false;
+                System.out.println("SecStore is stopping.");
+                break;
+            default:
+                System.out.println("Invalid command!");
+
+        }
+    }
+
+    private void set(String... args) {
+        switch (args[0]) {
+            case "servercert":
+                try {
+                    setServerCert(Paths.get(args[1]));
+                    System.out.println("New server cert set.");
+                } catch (IOException e) {
+                    System.out.println("ERROR");
+                    e.printStackTrace();
+                }
+                break;
+            case "serverkey":
+                try {
+                    setServerKey(Paths.get(args[1]));
+                    System.out.println("New server key set.");
+                } catch (InvalidKeySpecException | NoSuchAlgorithmException | IOException e) {
+                    System.out.println("ERROR");
+                    e.printStackTrace();
+                }
+                break;
+            case "destdir":
+                setDestDir(Paths.get(args[1]));
+                System.out.println("New destination directory set.");
+                break;
+            default:
+                System.out.println("Invalid command!");
+        }
+    }
+
+    public static void main(String[] args) {
+        try {
+            SecStore store = new SecStore();
+            System.out.println("Starting SecStore interactive mode");
+            store.startInteractiveMode();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 }
