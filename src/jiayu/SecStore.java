@@ -433,13 +433,16 @@ public class SecStore {
         if (args.length < 1) {
             execute("pwd");
         } else {
-            ProcessBuilder pb = new ProcessBuilder("cd", args[0]);
+            String cmd = "cd " + args[0];
+            String[] bash = { "/bin/sh", "-c", cmd };
+
             try {
-                pb.start();
+                Process p = Runtime.getRuntime().exec(bash);
             } catch (IOException e) {
                 e.printStackTrace();
                 System.out.println("Encountered an unknown error.");
             }
+
         }
     }
 }
