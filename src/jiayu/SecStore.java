@@ -437,6 +437,7 @@ public class SecStore {
             try {
                 pb.start();
             } catch (IOException e) {
+                e.printStackTrace();
                 System.out.println("Encountered an unknown error.");
             }
         }
