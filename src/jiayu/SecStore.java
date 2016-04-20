@@ -102,30 +102,42 @@ public class SecStore {
         OutputStream out = ss.getOutputStream();
 
         ByteBuffer buf = ByteBuffer.allocate(1 + Integer.BYTES);
+        int protocol;
+        int keyLength;
+        byte[] keyBytes;
         try {
             in.readFully(buf.array());
-        } catch (IOException e) {
-            e.printStackTrace();
-            throw new RuntimeException();
-        }
 
-        int protocol = buf.get();
-        int keyLength = buf.getInt();
+            protocol = buf.get();
+            keyLength = buf.getInt();
 
-        byte[] keyBytes = new byte[keyLength];
-        try {
+            keyBytes = new byte[keyLength];
             in.readFully(keyBytes);
         } catch (IOException e) {
-            e.printStackTrace();
-            throw new RuntimeException();
+//            e.printStackTrace();
+            System.out.println("ERROR: receive error");
+            try {
+                out.write(0);
+            } catch (IOException e1) {
+                System.out.println("ERROR: failed to notify client of failure");
+                return;
+            }
+            return;
         }
 
         buf = ByteBuffer.allocate(Integer.BYTES);
         try {
             in.readFully(buf.array());
         } catch (IOException e) {
-            e.printStackTrace();
-            throw new RuntimeException();
+//            e.printStackTrace();
+            System.out.println("ERROR: receive error");
+            try {
+                out.write(0);
+            } catch (IOException e1) {
+                System.out.println("ERROR: failed to notify client of failure");
+                return;
+            }
+            return;
         }
         int dataLength = buf.getInt();
 
@@ -133,15 +145,26 @@ public class SecStore {
         byte[] content;
 
         // decrypt differently based on protocol
-        switch (protocol) {
-            case CP1:
-                content = decryptCP1(in, keyBytes, dataLength);
-                break;
-            case CP2:
-                content = decryptCP2(in, keyBytes, dataLength);
-                break;
-            default:
-                throw new IllegalStateException();
+        try {
+            switch (protocol) {
+                case CP1:
+                    content = decryptCP1(in, keyBytes, dataLength);
+                    break;
+                case CP2:
+                    content = decryptCP2(in, keyBytes, dataLength);
+                    break;
+                default:
+                    throw new IllegalStateException();
+            }
+        } catch (IOException e) {
+            System.out.println("ERROR: decryption failed");
+            try {
+                out.write(0);
+            } catch (IOException e1) {
+                System.out.println("ERROR: failed to notify client of failure");
+                return;
+            }
+            return;
         }
 
         buf = ByteBuffer.wrap(content);
@@ -163,7 +186,14 @@ public class SecStore {
         System.out.println("Calculated SHA-256 checksum: " + DatatypeConverter.printBase64Binary(checksumVerify));
 
         if (!Arrays.equals(metadata.getChecksum(), checksumVerify)) {
-            throw new RuntimeException();
+            System.out.println("ERROR: file verification failed");
+            try {
+                out.write(0);
+            } catch (IOException e1) {
+                System.out.println("ERROR: failed to notify client of failure");
+                return;
+            }
+            return;
         } else System.out.println("File verified.");
 
 
@@ -172,32 +202,30 @@ public class SecStore {
         try {
             Files.write(destDir.resolve(filename), fileBytes, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
         } catch (IOException e) {
+            System.out.println("ERROR: failed to write received file to disk");
             try {
                 out.write(0);
             } catch (IOException e1) {
-                throw new RuntimeException();
+                System.out.println("ERROR: failed to notify client of failure");
+                return;
             }
+            return;
         }
 
         try {
             out.write(1);
             out.flush();
         } catch (IOException e) {
-            e.printStackTrace();
-            throw new RuntimeException();
+//            e.printStackTrace();
+            System.out.println("ERROR: failed to notify client of success");
         }
     }
 
-    private byte[] decryptCP2(SecureSocketInputStream in, byte[] keyBytes, int dataLength) {
+    private byte[] decryptCP2(SecureSocketInputStream in, byte[] keyBytes, int dataLength) throws IOException {
         byte[] content;
 
         byte[] toDecrypt = new byte[dataLength];
-        try {
-            in.readFully(toDecrypt);
-        } catch (IOException e) {
-            e.printStackTrace();
-            throw new RuntimeException();
-        }
+        in.readFully(toDecrypt);
 
         SecretKeySpec sks = new SecretKeySpec(keyBytes, "AES");
         try {
@@ -205,23 +233,17 @@ public class SecStore {
             cipher.init(Cipher.DECRYPT_MODE, sks);
             content = cipher.doFinal(toDecrypt);
         } catch (NoSuchAlgorithmException | NoSuchPaddingException | IllegalBlockSizeException | InvalidKeyException | BadPaddingException e) {
-            e.printStackTrace();
-            throw new RuntimeException();
+            throw new IOException();
         }
         return content;
     }
 
-    private static byte[] decryptCP1(SecureSocketInputStream in, byte[] keyBytes, int dataLength) {
+    private static byte[] decryptCP1(SecureSocketInputStream in, byte[] keyBytes, int dataLength) throws IOException {
         ArrayList<byte[]> ciphertext = new ArrayList<>();
         int bytesRead = 0;
         while (bytesRead < dataLength) {
             byte[] block = new byte[128];
-            try {
-                in.readFully(block);
-            } catch (IOException e) {
-                e.printStackTrace();
-                throw new RuntimeException();
-            }
+            in.readFully(block);
             bytesRead += 128;
             ciphertext.add(block);
         }
@@ -234,8 +256,7 @@ public class SecStore {
             cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
             cipher.init(Cipher.DECRYPT_MODE, publicKey);
         } catch (NoSuchAlgorithmException | NoSuchPaddingException | InvalidKeyException | InvalidKeySpecException e) {
-            e.printStackTrace();
-            throw new RuntimeException();
+            throw new IOException();
         }
 
         long startTime = System.currentTimeMillis();
@@ -243,8 +264,7 @@ public class SecStore {
             try {
                 plaintext.add(cipher.doFinal(bytes));
             } catch (IllegalBlockSizeException | BadPaddingException e) {
-                e.printStackTrace();
-                throw new RuntimeException();
+                throw new IOException();
             }
         }
         long endTime = System.currentTimeMillis();
@@ -253,12 +273,7 @@ public class SecStore {
         // reassemble content
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         for (byte[] bytes : plaintext)
-            try {
-                out.write(bytes);
-            } catch (IOException e) {
-                e.printStackTrace();
-                throw new RuntimeException();
-            }
+            out.write(bytes);
         return out.toByteArray();
     }
 
@@ -407,11 +422,17 @@ public class SecStore {
     }
 
     public void startFromConfigFile(Path configFile) {
-        if (!Files.exists(configFile)) throw new IllegalStateException();
+        if (!Files.exists(configFile)) {
+            System.out.println("error: file not found");
+            return;
+        }
 
         try {
             List<String> config = Files.readAllLines(configFile);
-            if (config.size() < 3) throw new IOException();
+            if (config.size() < 3) {
+                System.out.println("error: invalid config file");
+                return;
+            }
             if (sss == null) sss = new SecureServerSocket();
             setServerCert(Paths.get(config.get(0)));
             setServerKey(Paths.get(config.get(1)));
