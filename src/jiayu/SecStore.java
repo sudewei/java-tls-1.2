@@ -288,6 +288,13 @@ public class SecStore {
 
     private void execute(String command, String... args) {
         switch (command) {
+            case "pwd":
+                Path current = Paths.get("");
+                System.out.println(current.toAbsolutePath().toString());
+                break;
+            case "cd":
+                cd(args);
+                break;
             case "set":
                 set(args);
                 break;
@@ -419,6 +426,19 @@ public class SecStore {
         } catch (IOException | NoSuchAlgorithmException | InvalidKeySpecException | NumberFormatException e) {
             System.out.println("Invalid config file!");
             e.printStackTrace();
+        }
+    }
+
+    private void cd(String... args) {
+        if (args.length < 1) {
+            execute("pwd");
+        } else {
+            ProcessBuilder pb = new ProcessBuilder("cd", args[0]);
+            try {
+                pb.start();
+            } catch (IOException e) {
+                System.out.println("Encountered an unknown error.");
+            }
         }
     }
 }
