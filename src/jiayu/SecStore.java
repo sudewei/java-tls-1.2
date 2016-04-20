@@ -201,6 +201,7 @@ public class SecStore {
 
         try {
             Files.write(destDir.resolve(filename), fileBytes, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
+            System.out.println(String.format("Successfully saved to %s", destDir.resolve(filename).toAbsolutePath().toString()));
         } catch (IOException e) {
             System.out.println("ERROR: failed to write received file to disk");
             try {
