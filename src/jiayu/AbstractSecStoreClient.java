@@ -36,8 +36,10 @@ public abstract class AbstractSecStoreClient implements SecStoreClient {
 
     @Override
     public void connect(String host, int port) throws IOException {
+
         socket = new SecureSocket();
         caCerts.forEach(caCert -> socket.addCACertificate(caCert));
+        System.out.println(String.format("Connecting to server at %s:%d", host, port));
         socket.connectSecured(host, port);
         in = socket.getInputStream();
         out = socket.getOutputStream();

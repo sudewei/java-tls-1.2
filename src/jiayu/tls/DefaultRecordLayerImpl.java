@@ -206,4 +206,9 @@ class DefaultRecordLayerImpl implements RecordLayer {
         putNextOutgoingMessage(AlertMessage.fatal(AlertDescription.USER_CANCELLED));
         out.close();
     }
+
+    @Override
+    public Socket getSocket() {
+        return socket;
+    }
 }

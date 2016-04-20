@@ -7,6 +7,7 @@ import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
+import javax.xml.bind.DatatypeConverter;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -17,14 +18,31 @@ import java.security.*;
 import java.security.cert.CertificateException;
 import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.logging.ConsoleHandler;
+import java.util.logging.Handler;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 @SuppressWarnings("ALL")
 public class CP1Client extends AbstractSecStoreClient {
     public static void main(String[] args) {
+        Handler logHandler = new ConsoleHandler();
+        logHandler.setLevel(Level.FINE);
+        Logger logger = Logger.getLogger("jiayu.tls");
+        logger.addHandler(logHandler);
+        logger.setLevel(Level.FINE);
+        logger.setUseParentHandlers(false);
+
         try {
             SecStoreClient client = SecStoreClient.getInstance("CP1");
             client.addCACert(Paths.get("C:\\Users\\jiayu\\IdeaProjects\\tls-1.2-implementation-java\\misc\\certs\\servercert.crt"));
-            client.connect("localhost", 4443);
+//            client.connect("139.59.245.167", 4443);
+            try {
+                client.connect("localhost", 4443);
+            } catch (IOException e) {
+                System.out.println("Error: client failed to establish connection with server");
+                return;
+            }
             boolean b = client.uploadFile("C:\\Users\\jiayu\\IdeaProjects\\tls-1.2-implementation-java\\misc\\files\\1MB");
             if (b) {
                 System.out.println("Upload success!");
@@ -40,7 +58,8 @@ public class CP1Client extends AbstractSecStoreClient {
     public boolean uploadFile(Path file) throws IOException {
         // prepare the data by RSA encrypting it in 117 byte chunks
         Metadata metadata = Metadata.get(file);
-        System.out.println(String.format("Uploading %s (%d bytes)", metadata.getFilename(), metadata.getFilesize()));
+        System.out.println(String.format("Uploading file %s (%d bytes)", metadata.getFilename(), metadata.getFilesize()));
+        System.out.println("SHA-256: " + DatatypeConverter.printBase64Binary(metadata.getChecksum()));
 
         byte[] plaintext = Files.readAllBytes(file);
 

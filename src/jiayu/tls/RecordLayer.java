@@ -23,4 +23,6 @@ public interface RecordLayer {
     void updateReadState(ConnectionState newState);
 
     void close() throws IOException;
+
+    Socket getSocket();
 }

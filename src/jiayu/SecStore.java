@@ -10,6 +10,7 @@ import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
 import javax.crypto.spec.SecretKeySpec;
+import javax.xml.bind.DatatypeConverter;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -75,7 +76,7 @@ public class SecStore {
 
             SecureSocket ss = sss.acceptSecured();
             executorService.execute(() -> {
-                System.out.println(Thread.currentThread().getName() + " handling a request.");
+                System.out.println(Thread.currentThread().getName() + " handling a request from " + ss.getSocket().getInetAddress().getHostAddress());
                 receiveFile(ss);
             });
         }
@@ -150,13 +151,17 @@ public class SecStore {
         buf.get(metadataBytes);
 
         Metadata metadata = Metadata.fromBytes(metadataBytes);
-        System.out.println(String.format("Receiving %s (%d bytes)", metadata.getFilename(), metadata.getFilesize()));
+        System.out.println(String.format("Receiving file %s (%d bytes)", metadata.getFilename(), metadata.getFilesize()));
 
         byte[] fileBytes = new byte[metadata.getFilesize()];
         assert buf.remaining() == fileBytes.length;
         buf.get(fileBytes);
 
+        System.out.println("Received SHA-256 checksum:   " + DatatypeConverter.printBase64Binary(metadata.getChecksum()));
+
         byte[] checksumVerify = Metadata.calculateChecksum(fileBytes);
+        System.out.println("Calculated SHA-256 checksum: " + DatatypeConverter.printBase64Binary(checksumVerify));
+
         if (!Arrays.equals(metadata.getChecksum(), checksumVerify)) {
             throw new RuntimeException();
         } else System.out.println("File verified.");
