@@ -18,32 +18,28 @@ import java.security.*;
 import java.security.cert.CertificateException;
 import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.logging.ConsoleHandler;
-import java.util.logging.Handler;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 @SuppressWarnings("ALL")
 public class CP1Client extends AbstractSecStoreClient {
     public static void main(String[] args) {
-        Handler logHandler = new ConsoleHandler();
-        logHandler.setLevel(Level.FINE);
-        Logger logger = Logger.getLogger("jiayu.tls");
-        logger.addHandler(logHandler);
-        logger.setLevel(Level.FINE);
-        logger.setUseParentHandlers(false);
+//        Handler logHandler = new ConsoleHandler();
+//        logHandler.setLevel(Level.FINE);
+//        Logger logger = Logger.getLogger("jiayu.tls");
+//        logger.addHandler(logHandler);
+//        logger.setLevel(Level.FINE);
+//        logger.setUseParentHandlers(false);
 
         try {
             SecStoreClient client = SecStoreClient.getInstance("CP1");
             client.addCACert(Paths.get("C:\\Users\\jiayu\\IdeaProjects\\tls-1.2-implementation-java\\misc\\certs\\servercert.crt"));
-//            client.connect("139.59.245.167", 4443);
             try {
-                client.connect("localhost", 4443);
+                client.connect("139.59.245.167", 443);
+//                client.connect("localhost", 443);
             } catch (IOException e) {
                 System.out.println("Error: client failed to establish connection with server");
                 return;
             }
-            boolean b = client.uploadFile("C:\\Users\\jiayu\\IdeaProjects\\tls-1.2-implementation-java\\misc\\files\\1MB");
+            boolean b = client.uploadFile("C:\\Users\\jiayu\\IdeaProjects\\tls-1.2-implementation-java\\misc\\files\\10MB");
             if (b) {
                 System.out.println("Upload success!");
             } else {
@@ -52,6 +48,10 @@ public class CP1Client extends AbstractSecStoreClient {
         } catch (NoSuchAlgorithmException | IOException | CertificateException e) {
             e.printStackTrace();
         }
+    }
+
+    CP1Client() {
+
     }
 
     @Override
@@ -100,7 +100,7 @@ public class CP1Client extends AbstractSecStoreClient {
         long startTime = System.currentTimeMillis();
 
         // parallel
-        encryptParallel(privateKey, plaintextBlocksArray, ciphertextBlocksArray, 4);
+        encryptParallel(privateKey, plaintextBlocksArray, ciphertextBlocksArray, 8);
 
         // sequential
 //        encryptSequential(privateKey, plaintextBlocksArray, ciphertextBlocksArray);
@@ -108,7 +108,8 @@ public class CP1Client extends AbstractSecStoreClient {
         long endTime = System.currentTimeMillis();
 
         System.out.println();
-        System.out.println("Encryption time: " + (endTime - startTime) + " ms");
+        long encTime = endTime - startTime;
+        System.out.println("Encryption time: " + encTime + " ms");
 
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         byte[] pubKeyBytes = publicKey.getEncoded();
@@ -130,7 +131,10 @@ public class CP1Client extends AbstractSecStoreClient {
         System.out.println("Waiting for server response");
         boolean success = in.read() == 1;
         endTime = System.currentTimeMillis();
-        System.out.println("Round trip time: " + (endTime - startTime) + " ms");
+        long rtt = endTime - startTime;
+        System.out.println("Round trip time: " + rtt + " ms");
+
+//        log(encTime, rtt);
         return success;
     }
 

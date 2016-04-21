@@ -60,4 +60,9 @@ public abstract class AbstractSecStoreClient implements SecStoreClient {
 
         socket.close();
     }
+
+//    void log(long encTime, long rtt) throws IOException {
+//        Path logfile = Paths.get("C:\\Users\\jiayu\\IdeaProjects\\tls-1.2-implementation-java\\misc\\logfile.txt");
+//        Files.write(logfile, String.format(",%d,%d%n", encTime, rtt).getBytes(), StandardOpenOption.APPEND);
+//    }
 }
